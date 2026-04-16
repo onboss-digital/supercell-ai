@@ -1,0 +1,54 @@
+:root {
+  /* Colors - The Intelligent Canvas / Digital Curator Theme */
+  --color-primary: #0049db;
+  --color-primary-container: #2962ff;
+  --color-secondary: #006c49;
+  --color-secondary-container: #6cf8bb;
+  --color-tertiary: #715413;
+  --color-tertiary-container: #8c6c2a;
+  
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #d0dbed;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e6eeff;
+  --color-surface-container-high: #dee9fc;
+  --color-surface-container-highest: #d9e3f6;
+  
+  --color-on-surface: #121c2a;
+  --color-on-surface-variant: #434656;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #f7f5ff;
+  --color-on-secondary: #ffffff;
+  
+  --color-outline: #737687;
+  --color-outline-variant: rgba(195, 197, 216, 0.2);
+
+  /* Typography */
+  --font-family: 'Inter', sans-serif;
+  
+  /* Spacing Scale - Multiples of 4px */
+  --spacing-1: 0.25rem;  /* 4px */
+  --spacing-2: 0.5rem;   /* 8px */
+  --spacing-4: 1rem;     /* 16px */
+  --spacing-6: 1.5rem;   /* 24px */
+  --spacing-8: 2rem;     /* 32px */
+  --spacing-12: 3rem;    /* 48px */
+  --spacing-16: 4rem;    /* 64px */
+
+  /* Radius */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.5rem;   /* 8px */
+  --radius-lg: 0.75rem;  /* 12px */
+  --radius-xl: 1rem;     /* 16px */
+  --radius-2xl: 1.5rem;  /* 24px */
+
+  /* Shadows - Ambient Deep Shadows */
+  --shadow-ambient: 0 8px 40px rgba(18, 28, 42, 0.04);
+  --shadow-glass: 0 4px 24px rgba(18, 28, 42, 0.06);
+  
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-blur: blur(20px);
+}

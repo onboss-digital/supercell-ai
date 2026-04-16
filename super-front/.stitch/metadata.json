@@ -1,0 +1,29 @@
+{
+  "name": "projects/6677484524895167531",
+  "projectId": "6677484524895167531",
+  "title": "supercellAI",
+  "visibility": "PRIVATE",
+  "deviceType": "DESKTOP",
+  "screens": {
+    "dashboard": {
+      "id": "e38da3324cdb407d9b42092a7155dfcf",
+      "sourceScreen": "projects/6677484524895167531/screens/e38da3324cdb407d9b42092a7155dfcf",
+      "title": "Dashboard Geral SuperCell AI"
+    },
+    "ads": {
+      "id": "6ed805f52cd643c9abbe1717698bccf8",
+      "sourceScreen": "projects/6677484524895167531/screens/6ed805f52cd643c9abbe1717698bccf8",
+      "title": "Análise de Anúncios SuperCell AI"
+    },
+    "crm": {
+      "id": "fbae7702fa594e3ca68c01b1468bd770",
+      "sourceScreen": "projects/6677484524895167531/screens/fbae7702fa594e3ca68c01b1468bd770",
+      "title": "CRM de Leads SuperCell AI"
+    },
+    "funnel": {
+      "id": "6a4bb2ef01ce4fd699e19189ca4c86e1",
+      "sourceScreen": "projects/6677484524895167531/screens/6a4bb2ef01ce4fd699e19189ca4c86e1",
+      "title": "Funil de Vendas SuperCell (PT-BR)"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model BusinessManager {
+  id           String      @id @default(uuid())
+  name         String      // Apelido (ex: BM Matriz 01)
+  bmId         String      @unique // ID real do Gerenciador no Face
+  accessToken  String      // Token do Usuário de Sistema
+  adAccounts   AdAccount[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model AdAccount {
+  id           String          @id @default(uuid())
+  name         String
+  actId        String          @unique // act_1234567890
+  status       String          @default("ACTIVE")
+  bmId         String
+  bm           BusinessManager @relation(fields: [bmId], references: [id])
+  leads        Lead[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Lead {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String
+  status        String    @default("NEW") // NEW, CONTACTED, CONVERTED, LOST
+  adAccountId   String
+  adAccount     AdAccount @relation(fields: [adAccountId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
