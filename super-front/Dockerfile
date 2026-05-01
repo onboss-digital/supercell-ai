@@ -9,8 +9,7 @@ RUN npm run build
 # Estágio 2: Serve
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
-# Copia o vercel.json equivalente para o nginx se necessário, 
-# mas usaremos a config padrão de SPA no nginx.conf interno do container se desejar.
-# Por simplicidade, vamos usar o nginx padrão aqui.
+# Configuração de SPA para o Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
