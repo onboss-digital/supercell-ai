@@ -226,7 +226,12 @@ function Login() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Senha</label>
-               <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: '700', cursor: 'pointer', opacity: 0.8 }}>Esqueceu a senha?</span>
+               <span 
+                 onClick={() => alert('Para recuperar sua senha, entre em contato com o administrador do sistema.')}
+                 style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: '700', cursor: 'pointer', opacity: 0.8 }}
+               >
+                 Esqueceu a senha?
+               </span>
             </div>
             <input 
               type="password" 
@@ -248,11 +253,6 @@ function Login() {
               onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.background = 'rgba(0, 245, 255, 0.05)'; e.target.style.boxShadow = '0 0 15px rgba(0, 245, 255, 0.1)'; }}
               onBlur={(e) => { e.target.style.borderColor = 'rgba(0, 245, 255, 0.15)'; e.target.style.background = 'rgba(255, 255, 255, 0.03)'; e.target.style.boxShadow = 'none'; }}
             />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.5rem 0' }}>
-            <input type="checkbox" id="remember" style={{ width: '18px', height: '18px', borderRadius: '4px', cursor: 'pointer', accentColor: 'var(--color-primary)' }} />
-            <label htmlFor="remember" style={{ fontSize: '0.85rem', color: 'var(--color-on-surface-variant)', cursor: 'pointer', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Manter conectado</label>
           </div>
 
           <button 

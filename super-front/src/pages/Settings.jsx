@@ -140,6 +140,8 @@ function Settings() {
   const [currency, setCurrency] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [savingCompany, setSavingCompany] = useState(false);
+  const [dailySalesGoal, setDailySalesGoal] = useState(0);
+  const [dailyLeadsGoal, setDailyLeadsGoal] = useState(0);
 
   // Estados para Equipe
   const [team, setTeam] = useState([]);
@@ -250,8 +252,8 @@ function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: companyName, timezone, currency, logoUrl })
       });
+
       alert('Perfil da empresa atualizado!');
-      // Dispara um evento customizado para o Header atualizar
       window.dispatchEvent(new Event('companyProfileUpdated'));
     } catch (e) { console.error(e); }
     setSavingCompany(false);
@@ -300,6 +302,12 @@ function Settings() {
       setAiSystemPrompt(data.systemPrompt);
       setAiModel(data.model || 'gpt-4o');
       setIsAiOperational(data.isConfigured);
+
+      // Buscar metas também (agora na aba Jarvis)
+      const resGoals = await fetch(`${API_URL}/api/settings/goals`);
+      const dataGoals = await resGoals.json();
+      setDailySalesGoal(dataGoals.dailySalesGoal || 0);
+      setDailyLeadsGoal(dataGoals.dailyLeadsGoal || 0);
     } catch (err) {
       console.error('Erro ao buscar config de IA:', err);
     }
@@ -325,8 +333,15 @@ function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ systemPrompt: aiSystemPrompt, model: aiModel })
       });
+
+      // Salvar metas (agora aqui no Jarvis)
+      await fetch(`${API_URL}/api/settings/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dailySalesGoal: Number(dailySalesGoal), dailyLeadsGoal: Number(dailyLeadsGoal) })
+      });
       
-      alert('Configurações do Jarvis salvas com sucesso!');
+      alert('Configurações do Jarvis e Metas salvas com sucesso!');
       fetchAiConfig(); // Atualiza o status
     } catch (err) {
       console.error('Erro ao salvar config de IA:', err);
@@ -836,6 +851,33 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                     fontFamily: 'monospace', resize: 'none', boxSizing: 'border-box', opacity: 0.9
                   }}
                 />
+
+                <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Metas Operacionais</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                    Defina os objetivos diários que o Jarvis utilizará para analisar sua performance e dar conselhos estratégicos.
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>META DIÁRIA DE LEADS</label>
+                      <input 
+                        type="number"
+                        value={dailyLeadsGoal}
+                        onChange={e => setDailyLeadsGoal(e.target.value)}
+                        style={{ padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', color: 'var(--color-on-surface)', outline: 'none' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>META DIÁRIA DE VENDAS</label>
+                      <input 
+                        type="number"
+                        value={dailySalesGoal}
+                        onChange={e => setDailySalesGoal(e.target.value)}
+                        style={{ padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', color: 'var(--color-on-surface)', outline: 'none' }}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Seção do Modelo */}
@@ -995,7 +1037,8 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
             {tabs.map((tab) => (
               <button 
                 key={tab} 
-                onClick={() => navigate(`/settings/${reverseSlugs[tab]}`)}
+                onClick={() => tab !== 'Faturamento' && navigate(`/settings/${reverseSlugs[tab]}`)}
+                disabled={tab === 'Faturamento'}
                 style={{
                   padding: '1rem 1.5rem',
                   borderRadius: '0.75rem',
@@ -1007,12 +1050,19 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                   fontSize: '0.75rem',
                   fontFamily: 'var(--font-mono)',
                   textTransform: 'uppercase',
-                  cursor: 'pointer',
+                  cursor: tab === 'Faturamento' ? 'not-allowed' : 'pointer',
                   whiteSpace: 'nowrap',
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s ease',
+                  opacity: tab === 'Faturamento' ? 0.5 : 1,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}
               >
-                {tab}
+                <span>{tab}</span>
+                {tab === 'Faturamento' && (
+                  <span style={{ fontSize: '0.6rem', color: '#888', fontStyle: 'italic', marginLeft: '0.5rem' }}>(em desenvolvimento)</span>
+                )}
               </button>
             ))}
           </nav>
@@ -1133,8 +1183,8 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', fontWeight: '800', marginBottom: '0.5rem' }}>URL RECEPTORA DO SUPERCELL AI</label>
                 <div style={{ display: 'flex' }}>
-                  <input readOnly value="https://hugo-delitescent-countercurrently.ngrok-free.dev/api/webhooks/mercadophone" type="text" style={{ width: '100%', boxSizing: 'border-box', padding: '1rem', borderRadius: '0.75rem 0 0 0.75rem', border: '1px solid #ddd', borderRight: 'none', outline: 'none', fontWeight: '600', color: '#8B5CF6', background: '#F5F3FF' }} />
-                  <button onClick={() => { navigator.clipboard.writeText("https://hugo-delitescent-countercurrently.ngrok-free.dev/api/webhooks/mercadophone"); alert("Copiado!"); }} style={{ padding: '0 1rem', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '0 0.75rem 0.75rem 0', cursor: 'pointer' }}>
+                  <input readOnly value={`${API_URL}/api/webhooks/mercadophone`} type="text" style={{ width: '100%', boxSizing: 'border-box', padding: '1rem', borderRadius: '0.75rem 0 0 0.75rem', border: '1px solid #ddd', borderRight: 'none', outline: 'none', fontWeight: '600', color: '#8B5CF6', background: '#F5F3FF' }} />
+                  <button onClick={() => { navigator.clipboard.writeText(`${API_URL}/api/webhooks/mercadophone`); alert("Copiado!"); }} style={{ padding: '0 1rem', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '0 0.75rem 0.75rem 0', cursor: 'pointer' }}>
                     <span className="material-icons-outlined">content_copy</span>
                   </button>
                 </div>

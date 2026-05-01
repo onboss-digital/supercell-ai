@@ -179,6 +179,17 @@ function Dashboard() {
     }
   };
 
+  const moveFunnelItem = (index, direction) => {
+    const newOrder = [...selectedFunnelIds];
+    const item = newOrder.splice(index, 1)[0];
+    newOrder.splice(index + direction, 0, item);
+    setSelectedFunnelIds(newOrder);
+    
+    if (activeTemplate !== 'personalizado' && !customTemplates.some(t => t.id === activeTemplate)) {
+      setActiveTemplate('personalizado');
+    }
+  };
+
   if(loading || !dashboardData) {
     return <main className="main-content"><div style={{padding: '2rem', fontWeight: '800', color: 'var(--color-primary)'}}>Carregando Dados Otimizados...</div></main>;
   }
@@ -191,7 +202,10 @@ function Dashboard() {
   const visibleCards = masterMetrics.filter(m => selectedMetricIds.includes(m.id));
   
   const masterFunnels = funnelsTemplates?.personalizado || [];
-  const visibleFunnelData = masterFunnels.filter(f => selectedFunnelIds.includes(f.id));
+  // Ordenar masterFunnels conforme a ordem de selectedFunnelIds para o gráfico
+  const visibleFunnelData = selectedFunnelIds
+    .map(id => masterFunnels.find(f => f.id === id))
+    .filter(Boolean);
 
   const templateOptions = [
     { key: 'reconhecimento', label: 'Reconhecimento', icon: 'campaign', isNative: true },
@@ -487,7 +501,7 @@ function Dashboard() {
               </h4>
               <div style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b' }}>DADOS EM TELA</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b' }}>MÉTRICAS DA META</span>
                   <div style={{ display: 'flex', gap: '0.8rem' }}>
                     <span onClick={() => setSelectedMetricIds(dashboardData.metricsTemplates?.personalizado?.map(m => m.id) || [])} style={{ fontSize: '0.7rem', color: '#8b5cf6', cursor: 'pointer', fontWeight: '900', textTransform: 'uppercase' }}>Tudo</span>
                     <span onClick={() => setSelectedMetricIds([])} style={{ fontSize: '0.7rem', color: '#ef4444', cursor: 'pointer', fontWeight: '900', textTransform: 'uppercase' }}>Vazio</span>
@@ -520,17 +534,55 @@ function Dashboard() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  {(dashboardData.funnelsTemplates?.personalizado || []).map(funnel => (
-                    <label key={`funnel-${funnel.id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedFunnelIds.includes(funnel.id)}
-                        onChange={() => toggleFunnel(funnel.id)}
-                        style={{ accentColor: '#8b5cf6', width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>{funnel.label}</span>
-                    </label>
-                  ))}
+                  {/* Etapas Selecionadas (Com Ordenação) */}
+                  {selectedFunnelIds.map((id, idx) => {
+                    const funnel = (dashboardData.funnelsTemplates?.personalizado || []).find(f => f.id === id);
+                    if (!funnel) return null;
+                    return (
+                      <div key={`selected-funnel-${id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.5rem', background: 'white', borderRadius: '0.4rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <button 
+                            disabled={idx === 0}
+                            onClick={() => moveFunnelItem(idx, -1)}
+                            style={{ padding: 0, background: 'none', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? '#e2e8f0' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <span className="material-icons-outlined" style={{ fontSize: '1rem' }}>expand_less</span>
+                          </button>
+                          <button 
+                            disabled={idx === selectedFunnelIds.length - 1}
+                            onClick={() => moveFunnelItem(idx, 1)}
+                            style={{ padding: 0, background: 'none', border: 'none', cursor: idx === selectedFunnelIds.length - 1 ? 'default' : 'pointer', color: idx === selectedFunnelIds.length - 1 ? '#e2e8f0' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <span className="material-icons-outlined" style={{ fontSize: '1rem' }}>expand_more</span>
+                          </button>
+                        </div>
+                        
+                        <input 
+                          type="checkbox" 
+                          checked={true}
+                          onChange={() => toggleFunnel(id)}
+                          style={{ accentColor: '#8b5cf6', width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: '800', flex: 1 }}>{funnel.label}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '900' }}>#{idx + 1}</span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Etapas Não Selecionadas */}
+                  {(dashboardData.funnelsTemplates?.personalizado || [])
+                    .filter(f => !selectedFunnelIds.includes(f.id))
+                    .map(funnel => (
+                      <label key={`unselected-funnel-${funnel.id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer', padding: '0.5rem 0.5rem 0.5rem 2.4rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={false}
+                          onChange={() => toggleFunnel(funnel.id)}
+                          style={{ accentColor: '#8b5cf6', width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>{funnel.label}</span>
+                      </label>
+                    ))}
                 </div>
               </div>
             </>

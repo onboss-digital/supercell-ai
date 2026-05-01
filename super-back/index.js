@@ -95,10 +95,7 @@ const initDb = async () => {
       );
     `);
 
-    // Garantir que a coluna logoUrl exista (caso a tabela já tenha sido criada antes sem ela)
-    await pool.query(`
-      ALTER TABLE "CompanyProfile" ADD COLUMN IF NOT EXISTS "logoUrl" TEXT;
-    `);
+    await pool.query('ALTER TABLE "CompanyProfile" ADD COLUMN IF NOT EXISTS "logoUrl" TEXT;');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "TeamMember" (
@@ -121,6 +118,15 @@ const initDb = async () => {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS "SalesGoal" (
+        "id" TEXT PRIMARY KEY,
+        "dailySalesGoal" INTEGER DEFAULT 0,
+        "dailyLeadsGoal" INTEGER DEFAULT 0,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS "SecuritySettings" (
         "id" TEXT PRIMARY KEY,
         "twoFactorEnabled" BOOLEAN DEFAULT false,
@@ -128,20 +134,33 @@ const initDb = async () => {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "OnboardingState" (
+        "id" TEXT PRIMARY KEY,
+        "is_dismissed" BOOLEAN DEFAULT false,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Inserir dados iniciais se não existirem
     await pool.query('INSERT INTO "SecuritySettings" (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', ['default']);
+    await pool.query('INSERT INTO "OnboardingState" (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', ['default']);
+    await pool.query('INSERT INTO "SalesGoal" (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', ['default']);
+
     const invoiceCheck = await pool.query('SELECT id FROM "Invoice" LIMIT 1');
     if (invoiceCheck.rows.length === 0) {
       await pool.query('INSERT INTO "Invoice" (date, value, status) VALUES ($1, $2, $3)', ['15/04/2026', '497,00', 'Pago']);
       await pool.query('INSERT INTO "Invoice" (date, value, status) VALUES ($1, $2, $3)', ['15/03/2026', '497,00', 'Pago']);
     }
 
-    console.log('✅ Banco de Dados Preparado: Tabelas de Vendas, Insights e Configurações prontas.');
+    console.log('✅ Banco de Dados Preparado.');
   } catch (err) {
     console.error('❌ Erro ao inicializar banco:', err);
   }
 };
 initDb();
+
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -314,7 +333,10 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   let metrics = {
     totalSpent: 0, msgConversations: 0, linkClicks: 0, impressions: 0, purchases: 0,
     checkouts: 0, cart: 0, landingPageViews: 0, addPaymentInfo: 0, reach: 0,
-    clicks: 0, purchaseValue: 0, activeCamps: 0, pausedCamps: 0, followers: 0, profileVisits: 0
+    clicks: 0, purchaseValue: 0, activeCamps: 0, pausedCamps: 0, followers: 0, profileVisits: 0,
+    frequency: 0, uniqueClicks: 0, uniqueCtr: 0, 
+    video25: 0, video50: 0, video75: 0, video100: 0,
+    postEngagement: 0, pageEngagement: 0, postReactions: 0, comments: 0, shares: 0
   };
   
   let dailyAggregated = {};
@@ -323,7 +345,7 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   for (const acc of accountsToPull) {
     let fetchId = acc.actId;
     if (!fetchId.startsWith('act_')) fetchId = `act_${fetchId}`;
-    const url = `https://graph.facebook.com/v19.0/${fetchId}/insights?fields=spend,actions,action_values,reach,impressions,clicks&date_preset=${metaPeriod.includes('since') ? '' : metaPeriod}&time_range=${metaPeriod.includes('since') ? metaPeriod : ''}&time_increment=1&access_token=${acc.accessToken}`;
+    const url = `https://graph.facebook.com/v19.0/${fetchId}/insights?fields=spend,actions,action_values,reach,impressions,clicks,frequency,unique_clicks,unique_ctr&date_preset=${metaPeriod.includes('since') ? '' : metaPeriod}&time_range=${metaPeriod.includes('since') ? metaPeriod : ''}&time_increment=1&access_token=${acc.accessToken}`;
     
     try {
       const response = await fetch(url);
@@ -339,6 +361,9 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
           metrics.impressions += parseInt(stats.impressions || 0);
           metrics.reach += parseInt(stats.reach || 0);
           metrics.clicks += parseInt(stats.clicks || 0);
+          metrics.frequency = (metrics.frequency + parseFloat(stats.frequency || 0)) / (metrics.frequency > 0 ? 2 : 1); // Média simples
+          metrics.uniqueClicks += parseInt(stats.unique_clicks || 0);
+          
           if (stats.action_values) {
             const pv = stats.action_values.find(a => a.action_type === 'purchase');
             if (pv) metrics.purchaseValue += parseFloat(pv.value || 0);
@@ -362,6 +387,15 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
               if (type === 'add_payment_info') metrics.addPaymentInfo += val;
               if (type === 'follow' || type === 'page_like' || type === 'onsite_conversion.post_save') metrics.followers += val;
               if (type === 'profile_visit' || type === 'instagram_profile_visit') metrics.profileVisits += val;
+              if (type === 'post_engagement') metrics.postEngagement += val;
+              if (type === 'page_engagement') metrics.pageEngagement += val;
+              if (type === 'post_reaction') metrics.postReactions += val;
+              if (type === 'comment') metrics.comments += val;
+              if (type === 'link_click') metrics.shares += val; // Na Meta share também pode ser link_click dependendo da versão, mas o correto é 'post_engagement' -> 'share'
+              if (type === 'video_view' || type === 'video_p25_watched_actions') metrics.video25 += val;
+              if (type === 'video_p50_watched_actions') metrics.video50 += val;
+              if (type === 'video_p75_watched_actions') metrics.video75 += val;
+              if (type === 'video_p100_watched_actions') metrics.video100 += val;
             });
           }
         });
@@ -502,37 +536,55 @@ app.get('/api/dashboard', async (req, res) => {
       { id: "totalSpent", label: "Gasto", prefix: "R$ ", value: formatBRL(metrics.totalSpent) },
       { id: "impressions", label: "Impressões", prefix: "", value: formatNum(metrics.impressions) },
       { id: "reach", label: "Alcance", prefix: "", value: formatNum(metrics.reach) },
-      { id: "clicks", label: "Cliques", prefix: "", value: formatNum(metrics.clicks) },
-      { id: "ctr", label: "CTR", prefix: "", value: ctrAPI.toFixed(2) + "%" },
+      { id: "frequency", label: "Frequência", prefix: "", value: metrics.frequency.toFixed(2) },
+      { id: "clicks", label: "Cliques (Todos)", prefix: "", value: formatNum(metrics.clicks) },
+      { id: "uniqueClicks", label: "Cliques Únicos", prefix: "", value: formatNum(metrics.uniqueClicks) },
+      { id: "linkClicks", label: "Cliques no Link", prefix: "", value: formatNum(metrics.linkClicks) },
+      { id: "ctr", label: "CTR (Todos)", prefix: "", value: ctrAPI.toFixed(2) + "%" },
+      { id: "uniqueCtr", label: "CTR Único", prefix: "", value: (metrics.reach > 0 ? (metrics.uniqueClicks / metrics.reach) * 100 : 0).toFixed(2) + "%" },
       { id: "cpm", label: "CPM", prefix: "R$ ", value: formatBRL(cpmAPI) },
-      { id: "cpc", label: "CPC", prefix: "R$ ", value: formatBRL(cpcAPI) },
-      { id: "results", label: "Resultados", prefix: "", value: formatNum(metrics.msgConversations) },
-      { id: "costPerResult", label: "Custo por Resultado", prefix: "R$ ", value: formatBRL(metrics.msgConversations > 0 ? metrics.totalSpent / metrics.msgConversations : 0) },
+      { id: "cpc", label: "CPC (Todos)", prefix: "R$ ", value: formatBRL(cpcAPI) },
+      { id: "results", label: "Conversas", prefix: "", value: formatNum(metrics.msgConversations) },
+      { id: "costPerResult", label: "Custo por Conversa", prefix: "R$ ", value: formatBRL(metrics.msgConversations > 0 ? metrics.totalSpent / metrics.msgConversations : 0) },
+      { id: "landingPageViews", label: "Landing Page Views", prefix: "", value: formatNum(metrics.landingPageViews) },
+      { id: "cart", label: "Adições ao Carrinho", prefix: "", value: formatNum(metrics.cart) },
+      { id: "checkouts", label: "Iniciações de Checkout", prefix: "", value: formatNum(metrics.checkouts) },
+      { id: "addPaymentInfo", label: "Pagamento Iniciado", prefix: "", value: formatNum(metrics.addPaymentInfo) },
+      { id: "purchases", label: "Vendas (Pixel)", prefix: "", value: formatNum(metrics.purchases) },
       { id: "purchaseValue", label: "Faturamento (Pixel)", prefix: "R$ ", value: formatBRL(metrics.purchaseValue) },
       { id: "faturamentoPDV", label: "Faturamento PDV", prefix: "R$ ", value: formatBRL(pdv.faturamento) },
       { id: "roas", label: "ROAS", prefix: "", value: roasAPI.toFixed(2) },
+      { id: "postEngagement", label: "Engajamento com Post", prefix: "", value: formatNum(metrics.postEngagement) },
+      { id: "pageEngagement", label: "Engajamento com Página", prefix: "", value: formatNum(metrics.pageEngagement) },
+      { id: "postReactions", label: "Reações", prefix: "", value: formatNum(metrics.postReactions) },
+      { id: "comments", label: "Comentários", prefix: "", value: formatNum(metrics.comments) },
+      { id: "video25", label: "Vídeo 25%", prefix: "", value: formatNum(metrics.video25) },
+      { id: "video50", label: "Vídeo 50%", prefix: "", value: formatNum(metrics.video50) },
+      { id: "video75", label: "Vídeo 75%", prefix: "", value: formatNum(metrics.video75) },
+      { id: "video100", label: "Vídeo 100%", prefix: "", value: formatNum(metrics.video100) },
       { id: "activeCamps", label: "Campanhas Ativas", prefix: "", value: formatNum(metrics.activeCamps) },
       { id: "profileVisits", label: "Visitas ao Perfil", prefix: "", value: formatNum(metrics.profileVisits) },
       { id: "followers", label: "Seguidores", prefix: "", value: formatNum(metrics.followers) }
     ];
 
     const metricsTemplates = {
-      reconhecimento: masterMetrics.filter(m => ["totalSpent", "reach", "impressions", "cpm"].includes(m.id)),
-      trafego: masterMetrics.filter(m => ["totalSpent", "clicks", "cpc", "ctr", "landingPageViews"].includes(m.id)),
-      engajamento: masterMetrics.filter(m => ["totalSpent", "results", "costPerResult", "profileVisits", "followers"].includes(m.id)),
+      reconhecimento: masterMetrics.filter(m => ["totalSpent", "reach", "impressions", "cpm", "frequency"].includes(m.id)),
+      trafego: masterMetrics.filter(m => ["totalSpent", "clicks", "linkClicks", "uniqueClicks", "cpc", "ctr", "uniqueCtr", "landingPageViews"].includes(m.id)),
+      engajamento: masterMetrics.filter(m => ["totalSpent", "results", "costPerResult", "postEngagement", "comments", "video50", "profileVisits", "followers"].includes(m.id)),
       leads: masterMetrics.filter(m => ["totalSpent", "results", "costPerResult", "ctr", "cpm"].includes(m.id)),
-      vendas: masterMetrics.filter(m => ["totalSpent", "purchaseValue", "faturamentoPDV", "roas"].includes(m.id)),
+      vendas: masterMetrics.filter(m => ["totalSpent", "linkClicks", "results", "purchaseValue", "faturamentoPDV", "roas"].includes(m.id)),
       personalizado: masterMetrics
     };
 
     const masterFunnels = [
       { id: "impressions", label: "Impressões", value: metrics.impressions, percentage: "100%" },
       { id: "reach", label: "Alcance", value: metrics.reach, percentage: "100%" },
-      { id: "clicks", label: "Cliques", value: metrics.clicks, percentage: metrics.impressions > 0 ? ((metrics.clicks / metrics.impressions) * 100).toFixed(2) + "%" : "0%" },
+      { id: "clicks", label: "Cliques no Link", value: metrics.linkClicks, percentage: metrics.impressions > 0 ? ((metrics.linkClicks / metrics.impressions) * 100).toFixed(2) + "%" : "0%" },
+      { id: "ctr", label: "CTR", value: parseFloat(ctrAPI.toFixed(2)), percentage: ctrAPI.toFixed(2) + "%" },
+      { id: "leads", label: "Mensagens", value: metrics.msgConversations, percentage: metrics.linkClicks > 0 ? ((metrics.msgConversations / metrics.linkClicks) * 100).toFixed(2) + "%" : "0%" },
+      { id: "sales", label: "Vendas PDV", value: pdv.qtd, percentage: metrics.msgConversations > 0 ? ((pdv.qtd / metrics.msgConversations) * 100).toFixed(2) + "%" : "0%" },
       { id: "profileVisits", label: "Visitas ao Perfil", value: metrics.profileVisits, percentage: metrics.reach > 0 ? ((metrics.profileVisits / metrics.reach) * 100).toFixed(2) + "%" : "0%" },
-      { id: "followers", label: "Seguidores", value: metrics.followers, percentage: metrics.profileVisits > 0 ? ((metrics.followers / metrics.profileVisits) * 100).toFixed(2) + "%" : "0%" },
-      { id: "leads", label: "Leads", value: metrics.msgConversations, percentage: metrics.clicks > 0 ? ((metrics.msgConversations / metrics.clicks) * 100).toFixed(2) + "%" : "0%" },
-      { id: "sales", label: "Vendas", value: pdv.qtd, percentage: metrics.msgConversations > 0 ? ((pdv.qtd / metrics.msgConversations) * 100).toFixed(2) + "%" : "0%" }
+      { id: "followers", label: "Seguidores", value: metrics.followers, percentage: metrics.profileVisits > 0 ? ((metrics.followers / metrics.profileVisits) * 100).toFixed(2) + "%" : "0%" }
     ];
 
     const funnelsTemplates = {
@@ -540,7 +592,7 @@ app.get('/api/dashboard', async (req, res) => {
       trafego: masterFunnels.filter(f => ["impressions", "clicks"].includes(f.id)),
       engajamento: masterFunnels.filter(f => ["reach", "profileVisits", "followers"].includes(f.id)),
       leads: masterFunnels.filter(f => ["impressions", "clicks", "leads"].includes(f.id)),
-      vendas: masterFunnels.filter(f => ["impressions", "clicks", "leads", "sales"].includes(f.id)),
+      vendas: masterFunnels.filter(f => ["clicks", "ctr", "leads", "sales"].includes(f.id)),
       personalizado: masterFunnels
     };
 
@@ -1107,9 +1159,14 @@ app.delete('/api/bms/:id', async (req, res) => {
 app.get('/api/leads', async (req, res) => {
   try {
     const r = await pool.query(`
-      SELECT l.*, a.name as "adAccountName" 
+      SELECT l.*, a.name as "adAccountName", s."tipoVenda" as "productName"
       FROM "Lead" l 
       JOIN "AdAccount" a ON l."adAccountId" = a.id 
+      LEFT JOIN (
+        SELECT DISTINCT ON ("telefoneCliente") "telefoneCliente", "tipoVenda"
+        FROM "Sale"
+        ORDER BY "telefoneCliente", "createdAt" DESC
+      ) s ON l.phone = s."telefoneCliente"
       ORDER BY l."createdAt" DESC
     `);
     res.json(r.rows);
@@ -1360,4 +1417,118 @@ app.post('/api/settings/security/password', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erro ao alterar senha' }); }
 });
 
-app.listen(PORT, () => console.log(`🚀 Servidor pronto na porta ${PORT}`));
+// ---------------------------------------------------------
+// ONBOARDING
+// ---------------------------------------------------------
+
+app.get('/api/onboarding', async (req, res) => {
+  try {
+    const state = await pool.query('SELECT * FROM "OnboardingState" WHERE id = $1', ['default']);
+    res.json(state.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar onboarding' });
+  }
+});
+
+app.post('/api/onboarding/dismiss', async (req, res) => {
+  try {
+    await pool.query('UPDATE "OnboardingState" SET is_dismissed = true, "updatedAt" = NOW() WHERE id = $1', ['default']);
+    res.json({ message: 'Onboarding ignorado' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar onboarding' });
+  }
+});
+
+app.get('/api/onboarding/status', async (req, res) => {
+  try {
+    // 1. Empresa Configurada
+    const company = await pool.query('SELECT name, "logoUrl" FROM "CompanyProfile" WHERE id = $1', ['default']);
+    const isCompanyConfigured = company.rows.length > 0 && company.rows[0].name !== 'Supercell AI Store' && company.rows[0].logoUrl !== null;
+
+    // 2. Facebook Conectado
+    const bms = await pool.query('SELECT id FROM "BusinessManager" LIMIT 1');
+    const isFacebookConnected = bms.rows.length > 0;
+
+    // 3. MercadoFone Conectado
+    const sales = await pool.query('SELECT id FROM "Sale" WHERE "canalVenda" = \'MercadoPhone\' LIMIT 1');
+    const isMercadoFoneConnected = sales.rows.length > 0;
+
+    // 4. Jarvis Configurado
+    const aiConfig = await pool.query('SELECT "systemPrompt", "voiceId" FROM "AiConfig" WHERE id = $1', ['default']);
+    const defaultPrompt = "Você é o Jarvis, um assistente virtual estrategista especializado em gestão de tráfego pago (Meta Ads) e vendas de celulares (iPhones e Androids). Seu objetivo é analisar os números do dia e dar conselhos práticos e diretos.";
+    const isJarvisConfigured = aiConfig.rows.length > 0 && aiConfig.rows[0].systemPrompt.trim() !== defaultPrompt.trim();
+
+    // 5. Metas Definidas
+    const goals = await pool.query('SELECT "dailySalesGoal", "dailyLeadsGoal" FROM "SalesGoal" WHERE id = $1', ['default']);
+    const isGoalsConfigured = goals.rows.length > 0 && goals.rows[0].dailySalesGoal > 0 && goals.rows[0].dailyLeadsGoal > 0;
+
+    res.json({
+      steps: [
+        { id: 'company', label: 'Configurar Perfil da Empresa', completed: isCompanyConfigured, icon: 'business' },
+        { id: 'facebook', label: 'Conectar Meta Ads (BM)', completed: isFacebookConnected, icon: 'facebook' },
+        { id: 'webhook', label: 'Ativar Recebimento de Leads', completed: isFacebookConnected, icon: 'bolt' },
+        { id: 'mercadofone', label: 'Vincular Vendas MercadoFone', completed: isMercadoFoneConnected, icon: 'point_of_sale' },
+        { id: 'jarvis', label: 'Personalizar DNA do Jarvis', completed: isJarvisConfigured, icon: 'psychology' },
+        { id: 'goals', label: 'Definir Metas Operacionais', completed: isGoalsConfigured, icon: 'track_changes' }
+      ]
+    });
+  } catch (err) {
+    console.error('❌ Erro ao calcular status de onboarding:', err);
+    res.status(500).json({ error: 'Erro ao calcular status de onboarding', details: err.message });
+  }
+});
+
+// ---------------------------------------------------------
+// METAS DE VENDAS
+// ---------------------------------------------------------
+
+app.get('/api/settings/goals', async (req, res) => {
+  try {
+    const goals = await pool.query('SELECT * FROM "SalesGoal" WHERE id = $1', ['default']);
+    res.json(goals.rows[0] || { dailySalesGoal: 0, dailyLeadsGoal: 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar metas' });
+  }
+});
+
+app.post('/api/settings/goals', async (req, res) => {
+  const { dailySalesGoal, dailyLeadsGoal } = req.body;
+  try {
+    await pool.query(
+      'UPDATE "SalesGoal" SET "dailySalesGoal" = $1, "dailyLeadsGoal" = $2, "updatedAt" = NOW() WHERE id = $3',
+      [dailySalesGoal, dailyLeadsGoal, 'default']
+    );
+    res.json({ message: 'Metas atualizadas com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar metas' });
+  }
+});
+
+// ---------------------------------------------------------
+// WEBHOOKS WHATSAPP / META
+// ---------------------------------------------------------
+
+app.get('/api/webhooks/whatsapp', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token === 'supercell_verify_token') {
+      console.log('✅ Webhook WhatsApp Verificado com Sucesso!');
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  }
+});
+
+app.post('/api/webhooks/whatsapp', (req, res) => {
+  // Logs para depuração de novos leads
+  console.log('📩 Novo evento de Webhook recebido:', JSON.stringify(req.body, null, 2));
+  res.sendStatus(200);
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+});

@@ -1,9 +1,16 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { menuItems } from '../data/mockData';
 import logoImg from '../assets/logo-supercell.png';
 
 const Sidebar = () => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    // Aqui você pode adicionar a lógica de limpar localStorage/cookies se necessário
+    navigate('/login');
+  };
+
   return (
     <>
       {/* Sidebar para Desktop / Top Header para Mobile */}
@@ -27,7 +34,7 @@ const Sidebar = () => {
         </nav>
         
         <div className="nav-footer desktop-only">
-          <button className="nav-item" style={{ width: '100%', background: 'transparent' }}>
+          <button className="nav-item" style={{ width: '100%', background: 'transparent' }} onClick={handleLogout}>
             <span className="material-icons-outlined">logout</span>
             <span>Desconectar</span>
           </button>

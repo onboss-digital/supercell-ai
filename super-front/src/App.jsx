@@ -9,6 +9,7 @@ import CRM from './pages/CRM';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import OnboardingGuide from './components/OnboardingGuide';
 import { supabase } from './lib/supabase';
 import './styles/App.css';
 
@@ -67,6 +68,9 @@ function App() {
           <Route path="/configuracoes" element={<Navigate to="/settings" replace />} />
         </Routes>
       </div>
+
+      {/* Guia de Onboarding Global */}
+      {!isLoginPage && session && <OnboardingGuide />}
     </div>
   );
 }
