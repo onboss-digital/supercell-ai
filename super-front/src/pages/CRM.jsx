@@ -26,7 +26,12 @@ function CRM() {
     fetch(`${API_URL}/api/leads`)
       .then(res => res.json())
       .then(data => {
-        setLeads(data);
+        if (Array.isArray(data)) {
+          setLeads(data);
+        } else {
+          console.error('API não retornou um array de leads:', data);
+          setLeads([]);
+        }
         setLoading(false);
       })
       .catch(err => {
