@@ -680,7 +680,7 @@ function Reports() {
 
             {/* Active Visualizer or Status Text */}
             <div className="relative z-10 flex items-center justify-center">
-              {systemState === "SYS.AWAIT" ? (
+              {systemState === "SIS.AGUARDA" ? (
                 <div className="relative flex items-center justify-center w-72 h-72">
                   {/* Camadas de Energia do Núcleo (HIPER-ATIVO) */}
                   <div className="absolute inset-4 border-2 border-primary/20 rounded-full animate-[pulse_2s_easeInOut_infinite] scale-95 shadow-[0_0_50px_rgba(76,214,251,0.2)]"></div>
