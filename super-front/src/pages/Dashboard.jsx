@@ -35,8 +35,17 @@ function Dashboard() {
   const fetchCustomTemplates = () => {
     fetch(`${API_URL}/api/custom-templates`)
       .then(res => res.json())
-      .then(data => setCustomTemplates(data))
-      .catch(err => console.error('Erro ao buscar templates customizados', err));
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCustomTemplates(data);
+        } else {
+          setCustomTemplates([]);
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao buscar templates customizados', err);
+        setCustomTemplates([]);
+      });
   };
 
   useEffect(() => {
@@ -57,24 +66,26 @@ function Dashboard() {
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        setDashboardData(data);
-        
-        // Mantem as checkboxes inalteradas se a pessoa tiver escolhido antes,
-        // só fará o swap nativo caso esteja vazio (Primeira Abertura do site)
-        setSelectedMetricIds(prev => {
-           if(prev.length === 0 && data.metricsTemplates && data.metricsTemplates['vendas']) {
-             return data.metricsTemplates['vendas'].map(m => m.id);
-           }
-           return prev;
-        });
-        
-        setSelectedFunnelIds(prev => {
-           if(prev.length === 0 && data.funnelsTemplates && data.funnelsTemplates['vendas']) {
-             return data.funnelsTemplates['vendas'].map(f => f.id);
-           }
-           return prev;
-        });
-        
+        if (data && !data.error) {
+          setDashboardData(data);
+          
+          setSelectedMetricIds(prev => {
+            if(prev.length === 0 && data.metricsTemplates && data.metricsTemplates['vendas'] && Array.isArray(data.metricsTemplates['vendas'])) {
+              return data.metricsTemplates['vendas'].map(m => m.id);
+            }
+            return prev;
+          });
+          
+          setSelectedFunnelIds(prev => {
+            if(prev.length === 0 && data.funnelsTemplates && data.funnelsTemplates['vendas'] && Array.isArray(data.funnelsTemplates['vendas'])) {
+              return data.funnelsTemplates['vendas'].map(f => f.id);
+            }
+            return prev;
+          });
+        } else {
+          console.error('Erro nos dados do dashboard:', data?.error);
+          setDashboardData(null);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -188,7 +199,7 @@ function Dashboard() {
     { key: 'engajamento', label: 'Engajamento', icon: 'thumb_up', isNative: true },
     { key: 'leads', label: 'Leads', icon: 'person_add', isNative: true },
     { key: 'vendas', label: 'Vendas', icon: 'shopping_cart', isNative: true },
-    ...customTemplates.map(t => ({ key: t.id, label: t.name, icon: t.icon || 'auto_awesome', isNative: false })),
+    ... (Array.isArray(customTemplates) ? customTemplates.map(t => ({ key: t.id, label: t.name, icon: t.icon || 'auto_awesome', isNative: false })) : []),
     { key: 'personalizado', label: 'Personalizado', icon: 'tune', isNative: true }
   ];
 
