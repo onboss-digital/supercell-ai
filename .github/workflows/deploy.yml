@@ -20,8 +20,8 @@ jobs:
             cd ~/supercell-ai
             git pull origin main
             
-            # Atualiza o Frontend usando Docker (já que o host não tem Node/NPM)
-            docker run --rm -v ~/supercell-ai/super-front:/app -w /app node:20-slim sh -c "npm install && npm run build"
+            # Atualiza o Frontend usando Docker (passando a URL da API para o build)
+            docker run --rm -v ~/supercell-ai/super-front:/app -w /app -e VITE_API_URL=https://supercellia.com node:20-slim sh -c "npm install && npm run build"
             
             # Atualiza os Containers (Backend e DB)
             docker-compose up -d --build
