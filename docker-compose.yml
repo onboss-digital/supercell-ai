@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Banco de Dados PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: supercell_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-supersecret}
+      POSTGRES_DB: supercell_ai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - supercell_network
+
+  # Backend Node.js
+  backend:
+    build: 
+      context: ./super-back
+      dockerfile: Dockerfile
+    container_name: supercell_back
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - ./super-back/.env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-supersecret}@db:5432/supercell_ai?schema=public
+    networks:
+      - supercell_network
+    ports:
+      - "3005:3005"
+
+  # Frontend servido via Nginx (Build em tempo de execução ou via cópia)
+  # Nota: Em produção, o Nginx da VPS servirá os estáticos, 
+  # mas este container pode ser usado para testes ou preview.
+  frontend:
+    build:
+      context: ./super-front
+      dockerfile: Dockerfile
+    container_name: supercell_front
+    restart: always
+    ports:
+      - "8080:80"
+    networks:
+      - supercell_network
+
+networks:
+  supercell_network:
+    driver: bridge
+
+volumes:
+  pgdata:

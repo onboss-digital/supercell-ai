@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>J.A.R.V.I.S. Terminal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#00b4d8",
+                        "outline-variant": "#3d494d",
+                        "surface-container-low": "#171c1f",
+                        "error-container": "#93000a",
+                        "on-surface": "#dee3e6",
+                        "surface-container-high": "#252b2d",
+                        "on-primary": "#003642",
+                        "surface-tint": "#4cd6fb",
+                        "surface-dim": "#0e1416",
+                        "primary": "#4cd6fb",
+                        "inverse-primary": "#00677d",
+                        "on-secondary-fixed-variant": "#3d484f",
+                        "on-secondary-fixed": "#121d23",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#dee3e6",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "tertiary-fixed": "#ffdcc3",
+                        "secondary-container": "#3f4b52",
+                        "inverse-surface": "#dee3e6",
+                        "surface-bright": "#343a3c",
+                        "error": "#ffb4ab",
+                        "on-surface-variant": "#bcc9ce",
+                        "on-secondary-container": "#aebac3",
+                        "on-error": "#690005",
+                        "surface-variant": "#303638",
+                        "tertiary-container": "#eb8f3b",
+                        "secondary": "#bcc8d1",
+                        "on-secondary": "#273239",
+                        "secondary-fixed-dim": "#bcc8d1",
+                        "surface-container-lowest": "#090f11",
+                        "surface-container-highest": "#303638",
+                        "on-tertiary": "#4d2600",
+                        "surface-container": "#1b2023",
+                        "on-primary-fixed": "#001f27",
+                        "inverse-on-surface": "#2b3134",
+                        "background": "#0e1416",
+                        "surface": "#0e1416",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-primary-fixed-variant": "#004e5f",
+                        "tertiary": "#ffb77d",
+                        "primary-fixed-dim": "#4cd6fb",
+                        "on-primary-container": "#00414f",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#869398",
+                        "on-tertiary-container": "#5d2f00",
+                        "secondary-fixed": "#d8e4ed",
+                        "primary-fixed": "#b3ebff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "48px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "margin": "32px",
+                        "unit": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "h1": ["JetBrains Mono"],
+                        "body-sm": ["JetBrains Mono"],
+                        "label-caps": ["JetBrains Mono"],
+                        "h2": ["JetBrains Mono"],
+                        "h3": ["JetBrains Mono"],
+                        "body-lg": ["JetBrains Mono"],
+                        "code-sm": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "letterSpacing": "0em", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700" }],
+                        "h2": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "h3": ["18px", { "lineHeight": "1.3", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "1.5", "letterSpacing": "0em", "fontWeight": "400" }],
+                        "code-sm": ["12px", { "lineHeight": "1.4", "letterSpacing": "0em", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .spectrum-bar {
+            background: linear-gradient(to top, rgba(76, 214, 251, 0.1), rgba(76, 214, 251, 0.5));
+            border-top: 1px solid rgba(76, 214, 251, 0.8);
+            box-shadow: 0 0 10px rgba(76, 214, 251, 0.2);
+        }
+        .hud-bracket {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-color: rgba(76, 214, 251, 0.5);
+            border-style: solid;
+        }
+        .tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+        .tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+        .bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+        .br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+        
+        .scanline {
+            background: linear-gradient(to bottom, transparent, rgba(76, 214, 251, 0.2), transparent);
+            height: 2px;
+            width: 100%;
+            position: absolute;
+            top: 50%;
+            z-index: 10;
+        }
+        
+        /* Terminal Input Cursor */
+        .cursor-block::after {
+            content: '█';
+            color: #4cd6fb;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface h-screen w-screen overflow-hidden flex flex-col font-body-lg">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 border-b border-cyan-500/30 shadow-[0_0_15px_rgba(0,180,216,0.1)] flex justify-center items-center px-6 h-14 w-full bg-slate-950/90 hidden md:flex z-50">
+<div class="flex-1 flex items-center justify-start gap-4">
+<!-- Placeholder for potential left-side actions -->
+</div>
+<div class="text-cyan-400 font-mono font-bold tracking-[0.5em] text-center w-full uppercase text-xs flex-1">
+            J.A.R.V.I.S.
+        </div>
+<div class="flex-1 flex items-center justify-end gap-6 text-cyan-400">
+<button class="hover:text-cyan-300 transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<button class="hover:text-cyan-300 transition-colors">
+<span class="material-symbols-outlined" data-icon="monitor_heart">monitor_heart</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas (Background Spectrum) -->
+<main class="flex-1 relative overflow-hidden flex flex-col items-center justify-center p-md z-0" style="background-color: #0A0F1E;">
+<!-- Spectrum Visualizer (Abstract Representation) -->
+<div class="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+<div class="flex items-end gap-2 h-64 w-full max-w-4xl px-8">
+<!-- Decorative Bars -->
+<div class="spectrum-bar w-8" style="height: 20%;"></div>
+<div class="spectrum-bar w-8" style="height: 45%;"></div>
+<div class="spectrum-bar w-8" style="height: 70%;"></div>
+<div class="spectrum-bar w-8" style="height: 30%;"></div>
+<div class="spectrum-bar w-8" style="height: 85%;"></div>
+<div class="spectrum-bar w-8" style="height: 50%;"></div>
+<div class="spectrum-bar w-8" style="height: 95%;"></div>
+<div class="spectrum-bar w-8" style="height: 40%;"></div>
+<div class="spectrum-bar w-8" style="height: 60%;"></div>
+<div class="spectrum-bar w-8" style="height: 25%;"></div>
+<div class="spectrum-bar w-8" style="height: 75%;"></div>
+<div class="spectrum-bar w-8" style="height: 35%;"></div>
+<div class="spectrum-bar w-8" style="height: 55%;"></div>
+<div class="spectrum-bar w-8" style="height: 80%;"></div>
+<div class="spectrum-bar w-8" style="height: 45%;"></div>
+</div>
+<div class="scanline"></div>
+</div>
+<!-- Central Reticle/Focus Point -->
+<div class="relative w-64 h-64 border border-outline-variant/30 rounded-none pointer-events-none z-10 flex items-center justify-center">
+<div class="hud-bracket tl"></div>
+<div class="hud-bracket tr"></div>
+<div class="hud-bracket bl"></div>
+<div class="hud-bracket br"></div>
+<div class="text-primary/50 font-code-sm text-code-sm uppercase tracking-widest">
+                SYS.AWAIT
+            </div>
+<!-- Concentric rings -->
+<div class="absolute w-48 h-48 border border-primary/10 rounded-full border-dashed"></div>
+<div class="absolute w-32 h-32 border border-primary/20 rounded-full"></div>
+<div class="absolute w-2 h-2 bg-primary/40 rounded-full"></div>
+</div>
+<!-- Data Stream Greebles -->
+<div class="absolute top-8 left-8 text-primary/40 font-code-sm text-code-sm leading-tight hidden lg:block">
+            &gt; PRT_88.192.A<br/>
+            &gt; NET_SEC: OPTIMAL<br/>
+            &gt; PWR_GRID: STABLE
+        </div>
+<div class="absolute top-8 right-8 text-primary/40 font-code-sm text-code-sm leading-tight text-right hidden lg:block">
+            MEM: 4096TB<br/>
+            LOAD: 0.04%<br/>
+            SYNC: TRUE
+        </div>
+</main>
+<!-- Chat Panel (Terminal Interface) -->
+<div class="w-full flex flex-col border-t border-primary z-40 bg-surface-container-high/95 backdrop-blur-sm relative shadow-[0_-5px_20px_rgba(76,214,251,0.05)]" style="height: 38vh; background-color: #0F1729;">
+<!-- Panel Header / Handle -->
+<div class="w-full h-8 flex items-center justify-center border-b border-surface-variant relative">
+<div class="w-16 h-1 bg-outline-variant/50 rounded-none"></div>
+<span class="absolute left-4 text-primary font-label-caps text-label-caps">TERM.LINK_ACTIVE</span>
+<span class="absolute right-4 text-on-surface-variant font-code-sm text-code-sm">v.4.2.0</span>
+</div>
+<!-- Conversation History -->
+<div class="flex-1 overflow-y-auto p-md flex flex-col gap-sm">
+<!-- User Message -->
+<div class="flex justify-end w-full">
+<div class="max-w-[80%] border-l-2 border-primary bg-surface-container/50 p-sm pl-md">
+<p class="font-body-sm text-body-sm text-primary">Jarvis, verifique os sistemas de energia.</p>
+<span class="text-on-surface-variant/50 font-code-sm text-[10px] mt-1 block uppercase">&gt; USER_INPUT [14:02:11]</span>
+</div>
+</div>
+<!-- AI Response -->
+<div class="flex justify-start w-full">
+<div class="max-w-[80%] border-l-2 border-surface-variant bg-surface-container-low/50 p-sm pl-md">
+<p class="font-body-sm text-body-sm text-primary">Sistemas operando a 100%, senhor. Todos os reatores estão estáveis.</p>
+<span class="text-on-surface-variant/50 font-code-sm text-[10px] mt-1 block uppercase">&gt; SYS_RESP [14:02:12]</span>
+</div>
+</div>
+<!-- Awaiting Prompt -->
+<div class="flex justify-start w-full mt-2">
+<div class="pl-md">
+<span class="text-primary font-code-sm text-code-sm cursor-block">&gt;</span>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-sm border-t border-surface-variant bg-surface-dim flex items-center gap-sm">
+<div class="text-primary pl-2">
+<span class="material-symbols-outlined text-sm" data-icon="terminal">terminal</span>
+</div>
+<input class="flex-1 bg-transparent border-none text-primary font-body-sm text-body-sm focus:ring-0 placeholder:text-on-surface-variant/50" placeholder="Fale comigo, senhor." type="text"/>
+<button class="p-2 border border-outline-variant text-primary hover:border-primary hover:shadow-[0_0_8px_rgba(76,214,251,0.3)] transition-all">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+</button>
+</div>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center h-20 px-12 md:hidden bg-[#0F1729]/95 border-t border-cyan-500/40">
+<!-- Tab 1 -->
+<button class="flex flex-col items-center justify-center text-slate-500 pt-2 hover:bg-cyan-500/5 transition-colors">
+<span class="material-symbols-outlined mb-1" data-icon="mic">mic</span>
+<span class="font-mono text-[10px] uppercase tracking-wider">Command</span>
+</button>
+<!-- Tab 2 (Active based on chat context) -->
+<button class="flex flex-col items-center justify-center text-cyan-400 border-t-2 border-cyan-400 pt-2 opacity-80 hover:bg-cyan-500/5 transition-colors">
+<span class="material-symbols-outlined mb-1" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-mono text-[10px] uppercase tracking-wider">Terminal</span>
+</button>
+</nav>
+</body></html>

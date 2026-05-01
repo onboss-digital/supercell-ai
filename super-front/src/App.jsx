@@ -63,6 +63,7 @@ function App() {
           <Route path="/crm" element={<CRM />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/:tabId" element={<Settings />} />
           <Route path="/configuracoes" element={<Navigate to="/settings" replace />} />
         </Routes>
       </div>

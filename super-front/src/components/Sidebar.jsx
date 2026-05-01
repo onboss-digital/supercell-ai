@@ -1,19 +1,18 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { menuItems } from '../data/mockData';
-import logoImg from '../assets/logo-super-ai.png';
+import logoImg from '../assets/logo-supercell.png';
 
 const Sidebar = () => {
   return (
     <>
       {/* Sidebar para Desktop / Top Header para Mobile */}
       <aside className="sidebar">
-        <div className="brand" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <img src={logoImg} alt="SuperCell AI" style={{ height: '32px', width: 'auto', alignSelf: 'flex-start' }} />
-          <p className="desktop-only text-primary" style={{ fontWeight: '600', letterSpacing: '0.02em', fontSize: '0.85rem' }}>Inteligência de dados com IA</p>
+        <div className="brand">
+          <img src={logoImg} alt="SuperCell AI" style={{ height: '80px', width: 'auto' }} />
+          <p>INTELIGÊNCIA DE DADOS COM IA</p>
         </div>
         
-        {/* Menu Principal (Lateral no Desktop / Sumido no Mobile em favor do BottomNav) */}
         <nav className="nav-menu desktop-only">
           {menuItems.map((item) => (
             <NavLink 
@@ -28,22 +27,14 @@ const Sidebar = () => {
         </nav>
         
         <div className="nav-footer desktop-only">
-          <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <span className="material-icons-outlined">settings</span>
-            <span>Configurações</span>
-          </NavLink>
-          <button 
-            className="nav-item" 
-            style={{ width: '100%', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
+          <button className="nav-item" style={{ width: '100%', background: 'transparent' }}>
             <span className="material-icons-outlined">logout</span>
-            <span>Sair</span>
+            <span>Desconectar</span>
           </button>
         </div>
 
-        {/* Ícone de Configurações no Topo para Mobile */}
         <div className="mobile-only" style={{ marginLeft: 'auto', display: 'flex', gap: '1rem' }}>
-           <NavLink to="/settings" style={{ color: 'var(--color-on-surface)' }}>
+           <NavLink to="/settings" style={{ color: 'var(--color-primary)' }}>
               <span className="material-icons-outlined">settings</span>
            </NavLink>
         </div>

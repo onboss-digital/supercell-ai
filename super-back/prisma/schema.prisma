@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,34 +9,72 @@ datasource db {
 }
 
 model BusinessManager {
-  id           String      @id @default(uuid())
-  name         String      // Apelido (ex: BM Matriz 01)
-  bmId         String      @unique // ID real do Gerenciador no Face
-  accessToken  String      // Token do Usuário de Sistema
-  adAccounts   AdAccount[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id          String      @id @default(uuid())
+  name        String
+  bmId        String      @unique
+  accessToken String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  adAccounts  AdAccount[]
 }
 
 model AdAccount {
-  id           String          @id @default(uuid())
-  name         String
-  actId        String          @unique // act_1234567890
-  status       String          @default("ACTIVE")
-  bmId         String
-  bm           BusinessManager @relation(fields: [bmId], references: [id])
-  leads        Lead[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id        String          @id @default(uuid())
+  name      String
+  actId     String          @unique
+  status    String          @default("ACTIVE")
+  bmId      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  bm        BusinessManager @relation(fields: [bmId], references: [id])
+  leads     Lead[]
 }
 
 model Lead {
-  id            String    @id @default(uuid())
-  name          String
-  phone         String
-  status        String    @default("NEW") // NEW, CONTACTED, CONVERTED, LOST
-  adAccountId   String
-  adAccount     AdAccount @relation(fields: [adAccountId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  name         String
+  phone        String
+  status       String    @default("NEW")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  adAccountId  String
+  adName       String?
+  campaignName String?
+  adsetName    String?
+  platform     String    @default("whatsapp")
+  adAccount    AdAccount @relation(fields: [adAccountId], references: [id])
+}
+
+model Sale {
+  id              Int       @id @default(autoincrement())
+  telefoneCliente String?
+  valorTotal      Decimal?  @db.Decimal(10, 2)
+  createdAt       DateTime? @default(now())
+  canalVenda      String?
+  tipoVenda       String?
+}
+
+model AiConfig {
+  id           String   @id @default("default")
+  systemPrompt String
+  model        String   @default("gpt-4o")
+  updatedAt    DateTime @updatedAt
+}
+
+model DailyInsight {
+  id             Int       @id @default(autoincrement())
+  date           DateTime  @unique @default(dbgenerated("CURRENT_DATE")) @db.Date
+  content        String
+  metricsSummary Json?
+  createdAt      DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model CustomTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  metricIds Json
+  funnelIds Json
+  icon      String   @default("auto_awesome")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

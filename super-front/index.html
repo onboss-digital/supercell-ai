@@ -9,6 +9,60 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+                "outline-variant": "#3d494d",
+                "surface-container-low": "#171c1f",
+                "on-surface": "#dee3e6",
+                "surface-container-high": "#252b2d",
+                "surface-dim": "#0e1416",
+                "primary": "#4cd6fb",
+                "on-surface-variant": "#bcc9ce",
+                "surface-variant": "#303638",
+                "surface-container": "#1b2023",
+                "background": "#0e1416",
+                "surface": "#0e1416",
+                "outline": "#869398"
+            },
+            borderRadius: {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            spacing: {
+                "xl": "48px",
+                "gutter": "16px",
+                "sm": "8px",
+                "xs": "4px",
+                "md": "16px",
+                "margin": "32px",
+                "unit": "4px",
+                "lg": "24px"
+            },
+            fontFamily: {
+                "body-sm": ["JetBrains Mono", "monospace"],
+                "label-caps": ["JetBrains Mono", "monospace"],
+                "body-lg": ["JetBrains Mono", "monospace"],
+                "code-sm": ["JetBrains Mono", "monospace"]
+            },
+            fontSize: {
+                "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                "label-caps": ["12px", { "lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700" }],
+                "body-lg": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                "code-sm": ["12px", { "lineHeight": "1.4", "fontWeight": "400" }]
+            }
+          }
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

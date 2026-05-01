@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { API_URL } from '../api/config';
+import jarvisImg from '../assets/jarvis-foto.jpg';
 
 const GlobalHeader = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -27,6 +29,71 @@ const GlobalHeader = () => {
     setIsProfileOpen(false);
   };
 
+  const [companyLogo, setCompanyLogo] = useState('');
+  const [greeting, setGreeting] = useState('CENTRAL DE COMANDO');
+  const [weather, setWeather] = useState({ temp: '28°C', time: '--:--' });
+
+  const phrases = [
+    "BEM-VINDO DE VOLTA, SENHOR GUSTAVO",
+    "SISTEMA PRONTO PARA OPERAÇÃO, SENHOR GUSTAVO",
+    "AGUARDANDO ORDENS, SENHOR GUSTAVO",
+    "CONEXÃO ESTABELECIDA, SENHOR GUSTAVO",
+    "PROTOCOLO DE ANÁLISE ATIVO, SENHOR GUSTAVO",
+    "DADOS ATUALIZADOS, SENHOR GUSTAVO",
+    "SITUAÇÃO NOMINAL, SENHOR GUSTAVO"
+  ];
+
+  const fetchCompanyProfile = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/settings/company`);
+      const data = await res.json();
+      setCompanyLogo(data.logoUrl || '');
+    } catch (e) { console.error('Erro ao buscar logo:', e); }
+  };
+
+  const updateDateTimeAndWeather = async () => {
+    // Atualiza Horário de Rio Branco (UTC-5)
+    const now = new Date();
+    const rbTime = now.toLocaleTimeString('pt-BR', { 
+      timeZone: 'America/Rio_Branco', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+
+    // Tenta buscar clima de Rio Branco (Sanitizado para evitar vazamento de HTML/CSS)
+    try {
+      const res = await fetch('https://wttr.in/Rio+Branco?format=1');
+      const tempText = await res.text();
+      
+      // Validação básica: se o texto for muito longo ou contiver tags, é erro
+      if (tempText.length > 10 || tempText.includes('<') || tempText.includes('{')) {
+        setWeather({ temp: '28°C', time: rbTime }); // Fallback realista para Rio Branco
+      } else {
+        setWeather({ temp: tempText.trim(), time: rbTime });
+      }
+    } catch (e) {
+      setWeather({ temp: '28°C', time: rbTime });
+    }
+  };
+
+  useEffect(() => {
+    fetchCompanyProfile();
+    updateDateTimeAndWeather();
+    
+    // Escolhe uma frase aleatória no mount
+    const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+    setGreeting(randomPhrase);
+
+    // Atualiza o relógio a cada minuto
+    const timer = setInterval(updateDateTimeAndWeather, 60000);
+
+    window.addEventListener('companyProfileUpdated', fetchCompanyProfile);
+    return () => {
+      window.removeEventListener('companyProfileUpdated', fetchCompanyProfile);
+      clearInterval(timer);
+    };
+  }, []);
+
   // Se estiver na página de login, não mostra o header
   if (location.pathname === '/login') return null;
 
@@ -34,12 +101,12 @@ const GlobalHeader = () => {
     <header className="global-header">
       <div className="header-left">
         <div className="header-avatar-status">
-           <img src="https://ui-avatars.com/api/?name=Jarvis&background=0049DB&color=fff" alt="AI Jarvis" />
+           <img src={jarvisImg} alt="AI Jarvis" />
            <div className="status-dot"></div>
         </div>
         <div className="header-text">
-          <h2>Bem-vindo de volta, Sr. Gustavo</h2>
-          <p>SupercellAI processou seus canais. Aqui está a síntese estratégica de hoje.</p>
+          <h2>{greeting}</h2>
+          <p>SISTEMA JARVIS V4.0 // RIO BRANCO, AC: {weather.time} // {weather.temp}</p>
         </div>
       </div>
 
@@ -57,28 +124,28 @@ const GlobalHeader = () => {
             className={`profile-trigger ${isProfileOpen ? 'active' : ''}`} 
             onClick={() => setIsProfileOpen(!isProfileOpen)}
           >
-            <img src="https://ui-avatars.com/api/?name=Gustavo&background=333&color=fff" alt="User Profile" />
+            <img src={companyLogo || "https://ui-avatars.com/api/?name=Gustavo&background=3B82F6&color=fff"} alt="User Profile" />
           </button>
 
           {isProfileOpen && (
             <div className="profile-dropdown">
               <div className="dropdown-header">
-                <strong>Sr. Gustavo</strong>
-                <span>Administrador</span>
+                <strong>GUSTAVO // ADMIN</strong>
+                <span>ACESSO NÍVEL 10</span>
               </div>
               <div className="dropdown-divider"></div>
               <button className="dropdown-item" onClick={handleProfile}>
                 <span className="material-icons-outlined">person</span>
-                Perfil
+                PERFIL
               </button>
               <button className="dropdown-item" onClick={() => navigate('/settings')}>
                  <span className="material-icons-outlined">account_balance_wallet</span>
-                 Assinatura
+                 FINANCEIRO
               </button>
               <div className="dropdown-divider"></div>
               <button className="dropdown-item logout" onClick={handleLogout}>
                 <span className="material-icons-outlined">logout</span>
-                Sair
+                LOGOUT
               </button>
             </div>
           )}

@@ -1,54 +1,54 @@
 :root {
-  /* Colors - The Intelligent Canvas / Digital Curator Theme */
-  --color-primary: #0049db;
-  --color-primary-container: #2962ff;
-  --color-secondary: #006c49;
-  --color-secondary-container: #6cf8bb;
-  --color-tertiary: #715413;
-  --color-tertiary-container: #8c6c2a;
+  /* Colors - Cinematic TACTICAL HUD Pro Max */
+  --color-primary: #00f5ff; /* Electric Cyan */
+  --color-primary-glow: rgba(0, 245, 255, 0.4);
+  --color-primary-container: rgba(0, 245, 255, 0.08);
   
-  --color-surface: #f8f9ff;
-  --color-surface-dim: #d0dbed;
-  --color-surface-bright: #f8f9ff;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #eff4ff;
-  --color-surface-container: #e6eeff;
-  --color-surface-container-high: #dee9fc;
-  --color-surface-container-highest: #d9e3f6;
+  --color-secondary: #3B82F6; /* Tactical Blue */
+  --color-secondary-container: rgba(59, 130, 246, 0.1);
   
-  --color-on-surface: #121c2a;
-  --color-on-surface-variant: #434656;
-  --color-on-primary: #ffffff;
-  --color-on-primary-container: #f7f5ff;
-  --color-on-secondary: #ffffff;
+  --color-accent: #F97316; /* Signal Orange (Critical Alerts) */
+  --color-accent-glow: rgba(249, 115, 22, 0.5);
   
-  --color-outline: #737687;
-  --color-outline-variant: rgba(195, 197, 216, 0.2);
+  --color-background: #00080a; /* OLED Midnight */
+  --color-surface: #000c12; /* Tactical Slate */
+  --color-surface-dim: #00121a;
+  --color-surface-bright: #001a24;
+  
+  --color-on-surface: #e0fbfc;
+  --color-on-surface-variant: #64748b;
+  --color-on-primary: #00080a;
+  
+  --color-outline: rgba(0, 245, 255, 0.15);
+  --color-outline-variant: rgba(0, 245, 255, 0.05);
 
-  /* Typography */
-  --font-family: 'Inter', sans-serif;
+  /* Typography - Precise Technical Look */
+  --font-family: 'Fira Sans', sans-serif;
+  --font-mono: 'Fira Code', monospace;
   
-  /* Spacing Scale - Multiples of 4px */
-  --spacing-1: 0.25rem;  /* 4px */
-  --spacing-2: 0.5rem;   /* 8px */
-  --spacing-4: 1rem;     /* 16px */
-  --spacing-6: 1.5rem;   /* 24px */
-  --spacing-8: 2rem;     /* 32px */
-  --spacing-12: 3rem;    /* 48px */
-  --spacing-16: 4rem;    /* 64px */
+  /* Spacing Scale */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3.5rem;
 
-  /* Radius */
-  --radius-sm: 0.375rem; /* 6px */
-  --radius-md: 0.5rem;   /* 8px */
-  --radius-lg: 0.75rem;  /* 12px */
-  --radius-xl: 1rem;     /* 16px */
-  --radius-2xl: 1.5rem;  /* 24px */
+  /* Geometry - SHARP (Cliché Liquidation) */
+  --radius-sm: 0px; 
+  --radius-md: 0px;
+  --radius-lg: 2px;
+  --radius-xl: 4px;
+  --radius-2xl: 8px;
 
-  /* Shadows - Ambient Deep Shadows */
-  --shadow-ambient: 0 8px 40px rgba(18, 28, 42, 0.04);
-  --shadow-glass: 0 4px 24px rgba(18, 28, 42, 0.06);
+  /* Cinematic Effects */
+  --shadow-ambient: 0 0 25px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 15px var(--color-primary-glow);
+  --shadow-accent-glow: 0 0 15px var(--color-color-accent-glow);
   
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.8);
+  /* Glassmorphism Raw */
+  --glass-bg: rgba(0, 12, 18, 0.75);
   --glass-blur: blur(20px);
+  --glass-border: 1px solid rgba(0, 245, 255, 0.12);
 }
