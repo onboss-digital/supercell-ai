@@ -168,8 +168,70 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(morgan('dev'));
 
+// ---------------------------------------------------------
+// ONBOARDING
+// ---------------------------------------------------------
+
+app.get('/api/onboarding', async (req, res) => {
+  try {
+    const state = await pool.query('SELECT * FROM "OnboardingState" WHERE id = $1', ['default']);
+    res.json(state.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar onboarding' });
+  }
+});
+
+app.post('/api/onboarding/dismiss', async (req, res) => {
+  try {
+    await pool.query('UPDATE "OnboardingState" SET is_dismissed = true, "updatedAt" = NOW() WHERE id = $1', ['default']);
+    res.json({ message: 'Onboarding ignorado' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar onboarding' });
+  }
+});
+
+app.get('/api/onboarding/status', async (req, res) => {
+  try {
+    // 1. Empresa Configurada
+    const company = await pool.query('SELECT name, "logoUrl" FROM "CompanyProfile" WHERE id = $1', ['default']);
+    const isCompanyConfigured = company.rows.length > 0 && company.rows[0].name !== 'Supercell AI Store' && company.rows[0].logoUrl !== null;
+
+    // 2. Facebook Conectado
+    const bms = await pool.query('SELECT id FROM "BusinessManager" LIMIT 1');
+    const isFacebookConnected = bms.rows.length > 0;
+
+    // 3. MercadoFone Conectado
+    const sales = await pool.query('SELECT id FROM "Sale" WHERE "canalVenda" = \'MercadoPhone\' LIMIT 1');
+    const isMercadoFoneConnected = sales.rows.length > 0;
+
+    // 4. Jarvis Configurado
+    const aiConfig = await pool.query('SELECT "systemPrompt", "voiceId" FROM "AiConfig" WHERE id = $1', ['default']);
+    const defaultPrompt = "Você é o Jarvis, um assistente virtual estrategista especializado em gestão de tráfego pago (Meta Ads) e vendas de celulares (iPhones e Androids). Seu objetivo é analisar os números do dia e dar conselhos práticos e diretos.";
+    const isJarvisConfigured = aiConfig.rows.length > 0 && aiConfig.rows[0].systemPrompt.trim() !== defaultPrompt.trim();
+
+    // 5. Metas Definidas
+    const goals = await pool.query('SELECT "dailySalesGoal", "dailyLeadsGoal" FROM "SalesGoal" WHERE id = $1', ['default']);
+    const isGoalsConfigured = goals.rows.length > 0 && goals.rows[0].dailySalesGoal > 0 && goals.rows[0].dailyLeadsGoal > 0;
+
+    res.json({
+      steps: [
+        { id: 'company', label: 'Configurar Perfil da Empresa', completed: isCompanyConfigured, icon: 'business' },
+        { id: 'facebook', label: 'Conectar Meta Ads (BM)', completed: isFacebookConnected, icon: 'facebook' },
+        { id: 'webhook', label: 'Ativar Recebimento de Leads', completed: isFacebookConnected, icon: 'bolt' },
+        { id: 'mercadofone', label: 'Vincular Vendas MercadoFone', completed: isMercadoFoneConnected, icon: 'point_of_sale' },
+        { id: 'jarvis', label: 'Personalizar DNA do Jarvis', completed: isJarvisConfigured, icon: 'psychology' },
+        { id: 'goals', label: 'Definir Metas Operacionais', completed: isGoalsConfigured, icon: 'track_changes' }
+      ]
+    });
+  } catch (err) {
+    console.error('❌ Erro ao calcular status de onboarding:', err);
+    res.status(500).json({ error: 'Erro ao calcular status de onboarding', details: err.message });
+  }
+});
+
 // Rota de Saúde
 app.get('/health', (req, res) => res.json({ status: 'online', db: 'connected' }));
+
 
 // ---------------------------------------------------------
 // WHATSAPP WEBHOOK (META CLOUD API)
@@ -313,7 +375,7 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   let accountsToPull = [];
   if (actId && actId !== 'todas') {
     const q = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a."actId" = $1', [actId]);
-    accountsToPull = q.rows;
+    accountsToPull = q.rows.map(row => ({ ...row, accessToken: decrypt(row.accessToken) }));
   } else {
     const q = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id');
     accountsToPull = q.rows.map(row => ({ ...row, accessToken: decrypt(row.accessToken) }));
@@ -1418,67 +1480,6 @@ app.post('/api/settings/security/password', async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// ONBOARDING
-// ---------------------------------------------------------
-
-app.get('/api/onboarding', async (req, res) => {
-  try {
-    const state = await pool.query('SELECT * FROM "OnboardingState" WHERE id = $1', ['default']);
-    res.json(state.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar onboarding' });
-  }
-});
-
-app.post('/api/onboarding/dismiss', async (req, res) => {
-  try {
-    await pool.query('UPDATE "OnboardingState" SET is_dismissed = true, "updatedAt" = NOW() WHERE id = $1', ['default']);
-    res.json({ message: 'Onboarding ignorado' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao atualizar onboarding' });
-  }
-});
-
-app.get('/api/onboarding/status', async (req, res) => {
-  try {
-    // 1. Empresa Configurada
-    const company = await pool.query('SELECT name, "logoUrl" FROM "CompanyProfile" WHERE id = $1', ['default']);
-    const isCompanyConfigured = company.rows.length > 0 && company.rows[0].name !== 'Supercell AI Store' && company.rows[0].logoUrl !== null;
-
-    // 2. Facebook Conectado
-    const bms = await pool.query('SELECT id FROM "BusinessManager" LIMIT 1');
-    const isFacebookConnected = bms.rows.length > 0;
-
-    // 3. MercadoFone Conectado
-    const sales = await pool.query('SELECT id FROM "Sale" WHERE "canalVenda" = \'MercadoPhone\' LIMIT 1');
-    const isMercadoFoneConnected = sales.rows.length > 0;
-
-    // 4. Jarvis Configurado
-    const aiConfig = await pool.query('SELECT "systemPrompt", "voiceId" FROM "AiConfig" WHERE id = $1', ['default']);
-    const defaultPrompt = "Você é o Jarvis, um assistente virtual estrategista especializado em gestão de tráfego pago (Meta Ads) e vendas de celulares (iPhones e Androids). Seu objetivo é analisar os números do dia e dar conselhos práticos e diretos.";
-    const isJarvisConfigured = aiConfig.rows.length > 0 && aiConfig.rows[0].systemPrompt.trim() !== defaultPrompt.trim();
-
-    // 5. Metas Definidas
-    const goals = await pool.query('SELECT "dailySalesGoal", "dailyLeadsGoal" FROM "SalesGoal" WHERE id = $1', ['default']);
-    const isGoalsConfigured = goals.rows.length > 0 && goals.rows[0].dailySalesGoal > 0 && goals.rows[0].dailyLeadsGoal > 0;
-
-    res.json({
-      steps: [
-        { id: 'company', label: 'Configurar Perfil da Empresa', completed: isCompanyConfigured, icon: 'business' },
-        { id: 'facebook', label: 'Conectar Meta Ads (BM)', completed: isFacebookConnected, icon: 'facebook' },
-        { id: 'webhook', label: 'Ativar Recebimento de Leads', completed: isFacebookConnected, icon: 'bolt' },
-        { id: 'mercadofone', label: 'Vincular Vendas MercadoFone', completed: isMercadoFoneConnected, icon: 'point_of_sale' },
-        { id: 'jarvis', label: 'Personalizar DNA do Jarvis', completed: isJarvisConfigured, icon: 'psychology' },
-        { id: 'goals', label: 'Definir Metas Operacionais', completed: isGoalsConfigured, icon: 'track_changes' }
-      ]
-    });
-  } catch (err) {
-    console.error('❌ Erro ao calcular status de onboarding:', err);
-    res.status(500).json({ error: 'Erro ao calcular status de onboarding', details: err.message });
-  }
-});
-
-// ---------------------------------------------------------
 // METAS DE VENDAS
 // ---------------------------------------------------------
 
@@ -1504,29 +1505,10 @@ app.post('/api/settings/goals', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// WEBHOOKS WHATSAPP / META
-// ---------------------------------------------------------
-
-app.get('/api/webhooks/whatsapp', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode && token) {
-    if (mode === 'subscribe' && token === 'supercell_verify_token') {
-      console.log('✅ Webhook WhatsApp Verificado com Sucesso!');
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
-  }
-});
-
-app.post('/api/webhooks/whatsapp', (req, res) => {
-  // Logs para depuração de novos leads
-  console.log('📩 Novo evento de Webhook recebido:', JSON.stringify(req.body, null, 2));
-  res.sendStatus(200);
+// HANDLER GLOBAL 404 (Para depuração)
+app.use((req, res) => {
+  console.log(`⚠️ Rota não encontrada: ${req.method} ${req.url}`);
+  res.status(404).json({ error: 'Rota não encontrada no servidor backend', path: req.url });
 });
 
 app.listen(PORT, () => {

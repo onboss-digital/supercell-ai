@@ -145,7 +145,7 @@ const GlobalHeader = () => {
               <div className="dropdown-divider"></div>
               <button className="dropdown-item logout" onClick={handleLogout}>
                 <span className="material-icons-outlined">logout</span>
-                LOGOUT
+                SAIR
               </button>
             </div>
           )}
