@@ -9,3 +9,8 @@ dist/
 **/.agent/
 *.md
 arquivosMD/
+scratch/
+**/scratch/
+debug_production_env.js
+db_production_rescue.js
+
