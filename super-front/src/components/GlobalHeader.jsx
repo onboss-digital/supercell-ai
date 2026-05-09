@@ -30,25 +30,30 @@ const GlobalHeader = () => {
   };
 
   const [companyLogo, setCompanyLogo] = useState('');
+  const [companyName, setCompanyName] = useState('ADMIN');
   const [greeting, setGreeting] = useState('CENTRAL DE COMANDO');
   const [weather, setWeather] = useState({ temp: '28°C', time: '--:--' });
-
-  const phrases = [
-    "BEM-VINDO DE VOLTA, SENHOR GUSTAVO",
-    "SISTEMA PRONTO PARA OPERAÇÃO, SENHOR GUSTAVO",
-    "AGUARDANDO ORDENS, SENHOR GUSTAVO",
-    "CONEXÃO ESTABELECIDA, SENHOR GUSTAVO",
-    "PROTOCOLO DE ANÁLISE ATIVO, SENHOR GUSTAVO",
-    "DADOS ATUALIZADOS, SENHOR GUSTAVO",
-    "SITUAÇÃO NOMINAL, SENHOR GUSTAVO"
-  ];
 
   const fetchCompanyProfile = async () => {
     try {
       const res = await fetch(`${API_URL}/api/settings/company`);
       const data = await res.json();
       setCompanyLogo(data.logoUrl || '');
-    } catch (e) { console.error('Erro ao buscar logo:', e); }
+      setCompanyName(data.name || 'ADMIN');
+      
+      // Atualiza frases com o nome real
+      const name = (data.name || 'ADMIN').toUpperCase();
+      const dynamicPhrases = [
+        `BEM-VINDO DE VOLTA, SENHOR ${name}`,
+        `SISTEMA PRONTO PARA OPERAÇÃO, SENHOR ${name}`,
+        `AGUARDANDO ORDENS, SENHOR ${name}`,
+        `CONEXÃO ESTABELECIDA, SENHOR ${name}`,
+        `PROTOCOLO DE ANÁLISE ATIVO, SENHOR ${name}`,
+        `DADOS ATUALIZADOS, SENHOR ${name}`,
+        `SITUAÇÃO NOMINAL, SENHOR ${name}`
+      ];
+      setGreeting(dynamicPhrases[Math.floor(Math.random() * dynamicPhrases.length)]);
+    } catch (e) { console.error('Erro ao buscar perfil:', e); }
   };
 
   const updateDateTimeAndWeather = async () => {
@@ -80,10 +85,6 @@ const GlobalHeader = () => {
     fetchCompanyProfile();
     updateDateTimeAndWeather();
     
-    // Escolhe uma frase aleatória no mount
-    const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
-    setGreeting(randomPhrase);
-
     // Atualiza o relógio a cada minuto
     const timer = setInterval(updateDateTimeAndWeather, 60000);
 
@@ -124,13 +125,13 @@ const GlobalHeader = () => {
             className={`profile-trigger ${isProfileOpen ? 'active' : ''}`} 
             onClick={() => setIsProfileOpen(!isProfileOpen)}
           >
-            <img src={companyLogo || "https://ui-avatars.com/api/?name=Gustavo&background=3B82F6&color=fff"} alt="User Profile" />
+            <img src={companyLogo || `https://ui-avatars.com/api/?name=${companyName}&background=3B82F6&color=fff`} alt="User Profile" />
           </button>
 
           {isProfileOpen && (
             <div className="profile-dropdown">
               <div className="dropdown-header">
-                <strong>GUSTAVO // ADMIN</strong>
+                <strong>{companyName.toUpperCase()} // ADMIN</strong>
                 <span>ACESSO NÍVEL 10</span>
               </div>
               <div className="dropdown-divider"></div>

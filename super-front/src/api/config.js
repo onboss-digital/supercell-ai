@@ -3,7 +3,7 @@
  * Em desenvolvimento, utiliza o localhost:3005.
  * Em produção, utiliza a variável de ambiente VITE_API_URL.
  */
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+export const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '');
 
 export const API_ENDPOINTS = {
   DASHBOARD: `${API_URL}/api/dashboard`,

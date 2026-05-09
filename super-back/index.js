@@ -11,7 +11,27 @@ import { PrismaClient } from '@prisma/client';
 import { generateAiInsights, generateJarvisChatResponse } from './aiService.js';
 import cron from 'node-cron';
 import multer from 'multer';
+import { PDFParse } from 'pdf-parse';
 const { Pool } = pg;
+let pdfParser = PDFParse; // Agora usamos a função exportada corretamente
+
+// Força o carregamento ignorando cache do sistema (override: true)
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+
+// Função para logar em arquivo
+const fileLog = (msg) => {
+  const timestamp = new Date().toISOString();
+  const logMsg = `[${timestamp}] ${msg}\n`;
+  try {
+    fs.appendFileSync('debug.log', logMsg);
+  } catch (err) { }
+};
+
+// Log de Verificação de Ambiente
+const rawToken = process.env.META_ACCESS_TOKEN || '';
+const cleanToken = rawToken.trim().replace(/^"|"$/g, ''); // Remove aspas extras se houver
+const tokenDebug = cleanToken ? cleanToken.substring(0, 15) + '...' : 'NÃO ENCONTRADO';
+fs.writeFileSync('debug.log', `=== SERVIDOR REINICIADO ===\n[TOKEN LOADED] ${tokenDebug}\n`);
 
 // CONFIGURAÇÃO DE SEGURANÇA (AES-256)
 const algorithm = 'aes-256-cbc';
@@ -41,8 +61,6 @@ function decrypt(text) {
   }
 }
 
-dotenv.config();
-
 // ESCUDO GLOBAL CONTRA QUEDAS (Resiliência do Servidor)
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL ERROR (Uncaught):', err);
@@ -60,6 +78,9 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage() });
+
 // Inicialização de Tabelas
 const initDb = async () => {
   try {
@@ -67,10 +88,36 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS "Sale" (
         "id" SERIAL PRIMARY KEY,
         "telefoneCliente" TEXT,
+        "nomeCliente" TEXT,
+        "vendedor" TEXT,
+        "produto" TEXT,
         "valorTotal" DECIMAL(10,2),
+        "lucro" DECIMAL(10,2),
         "canalVenda" TEXT,
         "tipoVenda" TEXT,
+        "statusVenda" TEXT DEFAULT 'Concluído',
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS "CustomGoal" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "unit" TEXT,
+        "period" TEXT,
+        "active" BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS "KnowledgeFile" (
+        "id" TEXT PRIMARY KEY,
+        "fileName" TEXT NOT NULL,
+        "content" TEXT NOT NULL,
+        "fileType" TEXT,
+        "active" BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -153,6 +200,14 @@ const initDb = async () => {
       await pool.query('INSERT INTO "Invoice" (date, value, status) VALUES ($1, $2, $3)', ['15/04/2026', '497,00', 'Pago']);
       await pool.query('INSERT INTO "Invoice" (date, value, status) VALUES ($1, $2, $3)', ['15/03/2026', '497,00', 'Pago']);
     }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "JarvisMessage" (
+        "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        "role" TEXT NOT NULL,
+        "content" TEXT NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
     console.log('✅ Banco de Dados Preparado.');
   } catch (err) {
@@ -162,11 +217,19 @@ const initDb = async () => {
 initDb();
 
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({ 
+  origin: '*', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'] 
+}));
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(morgan('dev'));
+app.use((req, res, next) => {
+  console.log(`📡 [${new Date().toLocaleTimeString()}] CHAMADA RECEBIDA: ${req.method} ${req.url}`);
+  next();
+});
 
 // ---------------------------------------------------------
 // ONBOARDING
@@ -232,6 +295,61 @@ app.get('/api/onboarding/status', async (req, res) => {
 // Rota de Saúde
 app.get('/health', (req, res) => res.json({ status: 'online', db: 'connected' }));
 
+// ---------------------------------------------------------
+// PERFIL DA EMPRESA (PÁGINA META)
+// ---------------------------------------------------------
+app.get('/api/company/profile', async (req, res) => {
+  try {
+    let profiles = {
+      whatsapp: { name: 'Supercell AI', logoUrl: null },
+      instagram: { name: 'Supercell AI', logoUrl: null }
+    };
+
+    // 1. Perfil WhatsApp (Z-API)
+    const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+    const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+    const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+    const companyPhone = (process.env.COMPANY_PHONE || '').replace(/\D/g, '');
+
+    if (zapiInstance && zapiToken && companyPhone) {
+      try {
+        const photoRes = await fetch(`https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/profile-picture?phone=${companyPhone}`, {
+          headers: { 'Client-Token': zapiClientToken }
+        });
+        const photoData = await photoRes.json();
+        profiles.whatsapp.logoUrl = photoData.link || photoData.value || null;
+      } catch (e) {
+        console.error('[COMPANY PROFILE] Erro WhatsApp:', e.message);
+      }
+    }
+
+    // 2. Perfil Instagram (Meta)
+    const rawMetaToken = process.env.META_ACCESS_TOKEN || '';
+    const META_TOKEN = rawMetaToken.trim().replace(/^["']|["']$/g, '');
+    
+    if (META_TOKEN) {
+      try {
+        const accountsRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${META_TOKEN}`);
+        const accountsData = await accountsRes.json();
+        if (accountsData.data && accountsData.data.length > 0) {
+          const page = accountsData.data[0];
+          const pageInfoRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=name,picture.type(large)&access_token=${page.access_token}`);
+          const pageInfo = await pageInfoRes.json();
+          profiles.instagram.name = pageInfo.name || profiles.instagram.name;
+          profiles.instagram.logoUrl = pageInfo.picture?.data?.url || null;
+        }
+      } catch (e) {
+        console.error('[COMPANY PROFILE] Erro Instagram:', e.message);
+      }
+    }
+
+    res.json(profiles);
+  } catch (err) {
+    console.error('Erro ao buscar perfis da empresa:', err);
+    res.status(500).json({ error: 'Falha ao buscar perfis' });
+  }
+});
+
 
 // ---------------------------------------------------------
 // WHATSAPP WEBHOOK (META CLOUD API)
@@ -257,6 +375,7 @@ app.get('/api/webhooks/whatsapp', (req, res) => {
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const body = req.body;
   console.log('[META WEBHOOK] Payload Recebido:', JSON.stringify(body, null, 2));
+  console.log('[META WEBHOOK] Objeto detectado:', body.object);
 
   // --- LÓGICA INSTAGRAM DIRECT ---
   if (body.object === 'instagram') {
@@ -264,34 +383,179 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       const entry = body.entry[0];
       if (entry.messaging && entry.messaging[0]) {
         const msg = entry.messaging[0];
-        const igSenderId = msg.sender.id;
+        console.log('[DEBUG INSTAGRAM] Msg Object:', JSON.stringify(msg, null, 2));
+        const senderId = msg.sender.id;
+        const recipientId = msg.recipient.id;
+        let igMessageText = msg.message?.text || '';
+        const messageId = msg.message?.mid; // ID Único da Meta
         
-        // Verifica se lead já existe (usamos o ID do IG como identificador único no campo "phone")
-        const existing = await pool.query('SELECT id FROM "Lead" WHERE phone = $1', [igSenderId]);
-        if (existing.rows.length > 0) return res.sendStatus(200);
+        // Se não houver texto, verifica se há anexos (Mídia)
+        if (!igMessageText && msg.message?.attachments) {
+          const att = msg.message.attachments[0];
+          if (att.type === 'image' || att.type === 'audio' || att.type === 'video') {
+            igMessageText = `MEDIA:${att.type.toUpperCase()}:${att.payload.url}`;
+          }
+        }
+        
+        console.log('\n\n' + '='.repeat(50));
+        console.log('🚨 EVENTO DE MENSAGEM DO INSTAGRAM! 🚨');
+        fileLog(`EVENTO RECEBIDO: Sender=${senderId}, Recipient=${recipientId}, Msg=${igMessageText}`);
 
-        let name = `IG User ${igSenderId.slice(-4)}`;
+        // O token limpo para as chamadas de API
+        const rawMetaToken = process.env.META_ACCESS_TOKEN || '';
+        const META_TOKEN = rawMetaToken.trim().replace(/^["']|["']$/g, '');
+        
+        if (rawMetaToken !== META_TOKEN) {
+          fileLog(`AVISO: Token precisou de limpeza. Original len=${rawMetaToken.length}, Limpo len=${META_TOKEN.length}`);
+        }
+
+        // 1. DETERMINAR QUEM É QUEM (Lead ou Página)
+        // Se o sender for o mesmo ID que já temos em algum lead, é o lead.
+        // Mas na primeira vez, não sabemos. Geralmente o entry.id é o ID da Página.
+        const pageId = entry.id;
+        const isFromPage = senderId === pageId;
+        const leadIdForQuery = isFromPage ? recipientId : senderId;
+
+        if (!META_TOKEN) {
+          fileLog('ERRO: META_ACCESS_TOKEN não encontrado ou vazio!');
+        }
+
+        let name = `IG User ${leadIdForQuery.slice(-4)}`;
+        let instagramHandle = null;
         let adName = 'Orgânico / Direct';
         let campaignName = 'Instagram Direct';
         let adsetName = 'Inbound';
-
-        // Tenta buscar o nome real do usuário IG via Graph API
+        let profilePic = null;
+        // Tenta buscar o perfil real no Instagram via Graph API
         try {
-          const userUrl = `https://graph.facebook.com/v19.0/${igSenderId}?fields=name&access_token=${process.env.META_ACCESS_TOKEN}`;
-          const userRes = await fetch(userUrl).then(r => r.json());
-          if (userRes.name) name = userRes.name;
-        } catch(e) { console.error('[META WEBHOOK] Erro perfil IG:', e.message); }
+          if (META_TOKEN) {
+            // 1. BUSCA O TOKEN DA PÁGINA (Fundamental para capturar perfis)
+            const accountsRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${META_TOKEN}`);
+            const accountsData = await accountsRes.json();
+            
+            let pageAccessToken = META_TOKEN; // Fallback
+            if (accountsData.data && accountsData.data.length > 0) {
+              // Pegamos o token da primeira página vinculada (geralmente a única)
+              pageAccessToken = accountsData.data[0].access_token;
+              console.log(`[DEBUG TOKEN] Trocado System Token por Page Token da página: ${accountsData.data[0].name}`);
+            } else {
+              console.log(`[DEBUG TOKEN] Aviso: Nenhuma página encontrada vinculada a este token. Usando token original.`);
+            }
+
+            const userUrl = `https://graph.facebook.com/v19.0/${leadIdForQuery}?fields=name,username,profile_pic&access_token=${pageAccessToken}`;
+            console.log(`[DEBUG PERFIL] Tentando capturar perfil de: ${leadIdForQuery}`);
+            
+            const userRes = await fetch(userUrl);
+            const userData = await userRes.json();
+
+            console.log(`[DEBUG PERFIL] Resposta Meta:`, JSON.stringify(userData));
+            
+            if (userData.name || userData.profile_pic || userData.username) {
+              if (userData.profile_pic) profilePic = userData.profile_pic;
+              if (userData.name) name = userData.name;
+              if (userData.username) instagramHandle = userData.username;
+              fileLog(`✅ Perfil capturado com sucesso: ${name}`);
+            } else if (userData.error) {
+              fileLog(`Aviso: Falha na captura: ${userData.error.message}`);
+            }
+          }
+        } catch (err) {
+          fileLog(`FALHA CRÍTICA API: ${err.message}`);
+          console.error(`[DEBUG PERFIL] Erro:`, err.message);
+        }
+
+        // Detecta se é Tráfego Pago ou Orgânico
+        let tags = ['Tráfego Orgânico'];
+        if (msg.ads_context_data) {
+          tags = ['Tráfego Pago'];
+          adName = msg.ads_context_data.ad_title || adName;
+          campaignName = msg.ads_context_data.campaign_name || campaignName;
+        }
+
+        const existingLead = await pool.query('SELECT id, name, "instagramHandle", "profilePic", status, tags FROM "Lead" WHERE phone = $1', [leadIdForQuery]);
+        let leadId;
 
         const accountRes = await pool.query('SELECT id FROM "AdAccount" WHERE status = \'ACTIVE\' LIMIT 1');
         const targetAccountId = accountRes.rows[0]?.id;
-
-        if (targetAccountId) {
-          await pool.query(
-            'INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", "createdAt", "updatedAt") VALUES (gen_random_uuid(), $1, $2, \'Novo\', $3, $4, $5, $6, \'instagram\', NOW(), NOW())',
-            [name, igSenderId, targetAccountId, adName, adsetName, campaignName]
-          );
-          console.log(`✅ Novo Lead Instagram Salvo: ${name} (ID: ${igSenderId})`);
+        
+        if (!targetAccountId) {
+          console.log('[DEBUG INSTAGRAM] Nenhuma conta ATIVA encontrada, lead será criado sem vínculo.');
         }
+
+        if (existingLead.rows.length > 0) {
+          leadId = existingLead.rows[0].id;
+          const currentName = existingLead.rows[0].name || '';
+          const currentHandle = existingLead.rows[0].instagramHandle;
+          const currentPic = existingLead.rows[0].profilePic;
+
+          console.log('[DEBUG INSTAGRAM] Lead Existente encontrado:', leadId);
+          
+          // Atualizamos o perfil se os dados novos forem reais (não genéricos) ou se as tags mudaram para Pago
+          const isGeneric = currentName.startsWith('IG User');
+          const isNowPaid = tags.includes('Tráfego Pago') && !existingLead.rows[0].tags?.includes('Tráfego Pago');
+          const hasNewData = (isGeneric && !name.startsWith('IG User')) || (!currentHandle && instagramHandle) || (!currentPic && profilePic) || isNowPaid;
+
+          let newStatus = existingLead.rows[0].status;
+          if (isFromPage && newStatus === 'Novo') {
+            newStatus = 'Em Atendimento';
+            console.log('[DEBUG INSTAGRAM] Mudando status para Em Atendimento (Resposta do Agente via Webhook)');
+          }
+
+          if (hasNewData || newStatus !== existingLead.rows[0].status) {
+            console.log('[DEBUG INSTAGRAM] Atualizando Perfil/Status do Lead:', { name, instagramHandle, profilePic, tags, newStatus });
+            
+            // Se agora é pago, mesclamos as tags ou substituímos se for a tag de origem
+            let updatedTags = existingLead.rows[0].tags || [];
+            if (isNowPaid) {
+              updatedTags = updatedTags.filter(t => t !== 'Tráfego Orgânico');
+              if (!updatedTags.includes('Tráfego Pago')) updatedTags.push('Tráfego Pago');
+            }
+
+            await pool.query(
+              'UPDATE "Lead" SET name = $1, "instagramHandle" = $2, "profilePic" = $3, status = $4, "lastInteractionAt" = NOW(), "updatedAt" = NOW(), tags = $5 WHERE id = $6',
+              [name || currentName, instagramHandle || currentHandle, profilePic || currentPic, newStatus, updatedTags, leadId]
+            );
+          } else {
+            await pool.query(
+              'UPDATE "Lead" SET "lastInteractionAt" = NOW(), "updatedAt" = NOW() WHERE id = $1',
+              [leadId]
+            );
+          }
+
+          // GATILHO DE PALAVRA-CHAVE (AGENTE)
+          if (isFromPage && igMessageText) {
+            const normalizedMsg = igMessageText.toLowerCase().trim();
+            if (normalizedMsg.includes('você precisa vir na loja')) {
+              console.log('[AUTO STATUS] Gatilho detectado: Movendo para Qualificado');
+              await pool.query('UPDATE "Lead" SET status = $1, "updatedAt" = NOW() WHERE id = $2', ['Qualificado', leadId]);
+            }
+          }
+        } else {
+          // Só criamos lead se não for a página falando primeiro (improvável no direct)
+          console.log('[DEBUG INSTAGRAM] Criando Novo Lead com Tags:', tags);
+          const leadRes = await pool.query(
+            'INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", "instagramHandle", "profilePic", tags, "createdAt", "updatedAt", "lastInteractionAt") VALUES (gen_random_uuid(), $1, $2, \'Novo\', $3, $4, $5, $6, \'instagram\', $7, $8, $9, NOW(), NOW(), NOW()) RETURNING id',
+            [name, leadIdForQuery, targetAccountId, adName, adsetName, campaignName, instagramHandle, profilePic, tags]
+          );
+          leadId = leadRes.rows[0].id;
+          console.log('[DEBUG INSTAGRAM] Novo Lead Criado:', leadId);
+        }
+          
+        if (igMessageText) {
+          const messageSender = isFromPage ? 'agent' : 'lead';
+          
+          // DEDUPLICAÇÃO DEFINITIVA VIA MID
+          const result = await pool.query(
+            'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, $2, $3, NOW(), $4) ON CONFLICT (mid) DO NOTHING RETURNING id',
+            [igMessageText, messageSender, leadId, messageId]
+          );
+
+          // Se houve inserção (result.rows.length > 0) e é do cliente, incrementa o contador
+          if (result.rows.length > 0 && !isFromPage) {
+            await pool.query('UPDATE "Lead" SET "hasUnread" = TRUE, "unreadCount" = "unreadCount" + 1 WHERE id = $1', [leadId]);
+          }
+        }
+        console.log(`✅ Mensagem Instagram Processada (${isFromPage ? 'Agente' : 'Lead'}): ${name}`);
       }
       return res.sendStatus(200);
     } catch (err) {
@@ -319,12 +583,14 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       let adName = 'Direto/WhatsApp';
       let campaignName = 'Sem Campanha';
       let adsetName = 'Sem Conjunto';
+      let tags = ['Tráfego Orgânico'];
 
       if (message.referral) {
         detectedAdId = message.referral.source_id;
         console.log(`[WA WEBHOOK] Lead vindo do anúncio: ${detectedAdId}`);
         
         try {
+          tags = ['Tráfego Pago'];
           const adDetailUrl = `https://graph.facebook.com/v19.0/${detectedAdId}?fields=name,campaign{name},adset{name}&access_token=${process.env.META_ACCESS_TOKEN}`;
           const adDetailRes = await fetch(adDetailUrl).then(r => r.json());
           if (adDetailRes.name) {
@@ -348,12 +614,36 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         targetAccountId = accountRes.rows[0].id;
       }
 
-      if (targetAccountId) {
-        await pool.query(
-          'INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", "createdAt", "updatedAt") VALUES (gen_random_uuid(), $1, $2, \'Novo\', $3, $4, $5, $6, \'whatsapp\', NOW(), NOW())',
-          [name, phone, targetAccountId, adName, adsetName, campaignName]
+      if (true) {
+        const leadRes = await pool.query(
+          `INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", tags, "createdAt", "updatedAt", "lastInteractionAt") 
+           VALUES (gen_random_uuid(), $1, $2, 'Novo', $3, $4, $5, $6, 'whatsapp', $7, NOW(), NOW(), NOW())
+           ON CONFLICT (phone) DO UPDATE SET "lastInteractionAt" = NOW(), "updatedAt" = NOW(), tags = EXCLUDED.tags RETURNING id`,
+          [name, phone, targetAccountId, adName, adsetName, campaignName, tags]
         );
-        console.log(`✅ Novo Lead WhatsApp Salvo: ${name} (${phone}) - Anúncio: ${adName}`);
+        const leadId = leadRes.rows[0].id;
+
+        // Salva a mensagem recebida no histórico (Deduplicação via mid)
+        let messageText = message.text?.body || 'Mensagem de Mídia/Arquivo';
+        const waMessageId = message.id; // ID Único WhatsApp
+
+        // Detecção de Mídia WhatsApp
+        if (message.type === 'image' || message.type === 'audio' || message.type === 'video' || message.type === 'voice') {
+          const type = message.type === 'voice' ? 'AUDIO' : message.type.toUpperCase();
+          const mediaId = message[message.type]?.id;
+          messageText = `MEDIA:${type}:ID:${mediaId}`;
+        }
+
+        const resultWA = await pool.query(
+          'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, \'lead\', $2, NOW(), $3) ON CONFLICT (mid) DO NOTHING RETURNING id',
+          [messageText, leadId, waMessageId]
+        );
+
+        if (resultWA.rows.length > 0) {
+          // Incrementa contador se for mensagem nova
+          await pool.query('UPDATE "Lead" SET "hasUnread" = TRUE, "unreadCount" = "unreadCount" + 1 WHERE id = $1', [leadId]);
+        }
+            console.log(`✅ Lead WhatsApp Atualizado/Salvo: ${name} (${phone})`);
       }
       
       res.sendStatus(200);
@@ -363,6 +653,208 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     }
   } else {
     res.sendStatus(200);
+  }
+});
+
+// ---------------------------------------------------------
+// Z-API WEBHOOK (WHATSAPP)
+// ---------------------------------------------------------
+app.post('/api/webhooks/zapi', async (req, res) => {
+  try {
+    const body = req.body;
+    // Ignora eventos de status de mensagem para não poluir o log, foca em mensagens e conexão
+    if (body.type === 'message-received' || body.type === 'message-sent' || body.type === 'connected') {
+       console.log(`[Z-API WEBHOOK] Evento: ${body.type} de ${body.phone || 'Sistema'}`);
+    }
+
+    if (body.text || body.image || body.audio || body.video || body.document) {
+      const phone = body.phone;
+      const isFromMe = body.fromMe;
+      const messageText = body.text?.message || (body.image ? '📷 Imagem' : body.audio ? '🎵 Áudio' : body.video ? '🎥 Vídeo' : 'Arquivo');
+      const waMessageId = body.messageId;
+      const customerName = body.waitingMessage ? 'Cliente WhatsApp' : (body.senderName || 'Cliente WhatsApp');
+      let profilePic = body.senderPhoto || null;
+
+      // Se a foto não veio no webhook, tentamos buscar manualmente na Z-API
+      if (!profilePic) {
+        try {
+          const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+          const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+          const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+          
+          // Z-API prefere o número limpo sem @c.us na busca de foto
+          const cleanPhoneForPhoto = phone.split('@')[0];
+          const photoRes = await fetch(`https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/profile-picture?phone=${cleanPhoneForPhoto}`, {
+            headers: { 'Client-Token': zapiClientToken }
+          });
+          const photoData = await photoRes.json();
+          if (photoData.link || photoData.value) {
+            profilePic = photoData.link || photoData.value;
+            console.log(`[Z-API PHOTO] Foto capturada manualmente para ${phone}`);
+          }
+        } catch (e) {
+          console.error(`[Z-API PHOTO ERROR] Falha ao buscar foto para ${phone}`);
+        }
+      }
+
+      let targetAccountId = null;
+      const accountRes = await pool.query('SELECT id FROM "AdAccount" WHERE status = \'ACTIVE\' LIMIT 1');
+      if (accountRes.rows.length > 0) targetAccountId = accountRes.rows[0].id;
+
+      const leadRes = await pool.query(
+        `INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", tags, "createdAt", "updatedAt", "lastInteractionAt", "profilePic") 
+         VALUES (gen_random_uuid(), $1, $2, 'Novo', $3, 'Direto/Z-API', 'Inbound', 'Z-API', 'whatsapp', $4, NOW(), NOW(), NOW(), $5)
+         ON CONFLICT (phone) DO UPDATE SET 
+           "lastInteractionAt" = NOW(), 
+           "updatedAt" = NOW(),
+           "profilePic" = COALESCE(EXCLUDED."profilePic", "Lead"."profilePic"),
+           name = CASE WHEN "Lead".name = 'Cliente WhatsApp' THEN EXCLUDED.name ELSE "Lead".name END
+         RETURNING id, status`,
+        [customerName, phone, targetAccountId, ['Tráfego Orgânico'], profilePic]
+      );
+      
+      const leadId = leadRes.rows[0].id;
+      const currentStatus = leadRes.rows[0].status;
+
+      const resultWA = await pool.query(
+        'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, $2, $3, NOW(), $4) ON CONFLICT (mid) DO NOTHING RETURNING id',
+        [messageText, isFromMe ? 'agent' : 'lead', leadId, waMessageId]
+      );
+
+      if (resultWA.rows.length > 0 && !isFromMe) {
+        // Tenta atualizar unreadCount, mas não trava se a coluna não existir
+        try {
+          await pool.query('UPDATE "Lead" SET "hasUnread" = TRUE, "unreadCount" = COALESCE("unreadCount", 0) + 1 WHERE id = $1', [leadId]);
+        } catch (e) {
+          await pool.query('UPDATE "Lead" SET "hasUnread" = TRUE WHERE id = $1', [leadId]);
+        }
+      } else if (isFromMe && currentStatus === 'Novo') {
+        await pool.query('UPDATE "Lead" SET status = \'Em Atendimento\', "updatedAt" = NOW() WHERE id = $1', [leadId]);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('❌ [Z-API WEBHOOK] Erro Crítico:', err.message);
+    res.sendStatus(500);
+  }
+});
+
+// ---------------------------------------------------------
+// Z-API MANAGEMENT
+// ---------------------------------------------------------
+app.get('/api/whatsapp/status', async (req, res) => {
+  const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+  const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+  const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+
+  console.log(`[Z-API STATUS] Verificando instância ${zapiInstance}`);
+
+  try {
+    const response = await fetch(`https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/status`, {
+      headers: { 'Client-Token': zapiClientToken }
+    });
+    const data = await response.json();
+    console.log(`[Z-API STATUS] Resposta:`, data);
+    
+    res.json({
+      instance: {
+        state: data.connected ? 'open' : 'disconnected'
+      },
+      ...data
+    });
+  } catch (err) {
+    console.error(`[Z-API STATUS ERROR]`, err.message);
+    res.status(500).json({ error: 'Erro ao verificar status do WhatsApp', details: err.message });
+  }
+});
+
+app.get('/api/whatsapp/qrcode', async (req, res) => {
+  const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+  const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+  const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+
+  const url = `https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/qr-code`;
+  console.log(`[Z-API QRCODE] Chamando URL: ${url}`);
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'Client-Token': zapiClientToken }
+    });
+    const data = await response.json();
+    console.log(`[Z-API QRCODE] Resposta:`, data.value ? 'QR Code Recebido (Base64)' : data);
+
+    if (data.value) {
+      return res.json({ qrcode: data.value });
+    }
+
+    if (data.connected) {
+      return res.json({ status: 'connected', message: 'WhatsApp já está conectado!' });
+    }
+
+    res.json({ 
+      status: 'pending', 
+      message: 'Aguardando geração do QR Code pela Z-API.' 
+    });
+
+  } catch (err) {
+    console.error('[Z-API QRCODE ERROR]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar QR Code na Z-API', details: err.message });
+  }
+});
+
+app.post('/api/whatsapp/logout', async (req, res) => {
+  const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+  const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+  const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+
+  try {
+    console.log(`[Z-API LOGOUT] Desconectando ${zapiInstance}`);
+    await fetch(`https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/disconnect`, {
+      method: 'GET',
+      headers: { 'Client-Token': zapiClientToken }
+    });
+    res.json({ success: true, message: 'Instância desconectada' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao desconectar instância' });
+  }
+});
+
+// Configura o webhook automaticamente na Z-API
+app.post('/api/whatsapp/setup-webhook', async (req, res) => {
+  const { webhookUrl } = req.body;
+  const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+  const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+  const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+
+  if (!zapiInstance || !zapiToken || !webhookUrl) {
+    return res.status(400).json({ error: 'Faltam parâmetros para configurar o webhook' });
+  }
+
+  try {
+    console.log(`[Z-API SETUP] Configurando Webhook: ${webhookUrl}/api/webhooks/zapi`);
+    const endpoints = [
+      'update-webhook-received',
+      'update-webhook-connected',
+      'update-webhook-disconnected',
+      'update-webhook-message-status'
+    ];
+
+    for (const endpoint of endpoints) {
+      await fetch(`https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/${endpoint}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Client-Token': zapiClientToken
+        },
+        body: JSON.stringify({ value: `${webhookUrl}/api/webhooks/zapi` })
+      });
+    }
+
+    res.json({ success: true, message: 'Webhooks configurados na Z-API' });
+  } catch (err) {
+    console.error('[Z-API SETUP ERROR]', err.message);
+    res.status(500).json({ error: 'Erro ao configurar webhooks' });
   }
 });
 
@@ -384,12 +876,13 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   // 2. Mapeamento de Datas
   let metaPeriod = 'today';
   if (periodo === '7dias') metaPeriod = 'last_7d';
-  if (periodo === 'mes') metaPeriod = 'this_month';
+  if (periodo === 'mes') metaPeriod = 'last_30d'; // Ajustado para 30 dias conforme solicitado anteriormente
   if (periodo === 'ontem') metaPeriod = 'yesterday';
+  if (periodo === 'maximo') metaPeriod = 'maximum';
   if (periodo === 'personalizado' && dateStart && dateEnd) {
     const start = dateStart.split('T')[0];
     const end = dateEnd.split('T')[0];
-    metaPeriod = `{'since':'${start}','until':'${end}'}`;
+    metaPeriod = `{"since":"${start}","until":"${end}"}`;
   }
 
   let metrics = {
@@ -407,65 +900,88 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   for (const acc of accountsToPull) {
     let fetchId = acc.actId;
     if (!fetchId.startsWith('act_')) fetchId = `act_${fetchId}`;
-    const url = `https://graph.facebook.com/v19.0/${fetchId}/insights?fields=spend,actions,action_values,reach,impressions,clicks,frequency,unique_clicks,unique_ctr&date_preset=${metaPeriod.includes('since') ? '' : metaPeriod}&time_range=${metaPeriod.includes('since') ? metaPeriod : ''}&time_increment=1&access_token=${acc.accessToken}`;
     
-    try {
-      const response = await fetch(url);
-      const fbRes = await response.json();
-      if (fbRes.error) { metaApiError = fbRes.error.message; continue; }
-      if (fbRes.data) {
-        fbRes.data.forEach(stats => {
-          const dateStr = stats.date_start;
-          if (!dailyAggregated[dateStr]) dailyAggregated[dateStr] = { spent: 0, messages: 0 };
-          const spent = parseFloat(stats.spend || 0);
-          metrics.totalSpent += spent;
-          dailyAggregated[dateStr].spent += spent;
-          metrics.impressions += parseInt(stats.impressions || 0);
-          metrics.reach += parseInt(stats.reach || 0);
-          metrics.clicks += parseInt(stats.clicks || 0);
-          metrics.frequency = (metrics.frequency + parseFloat(stats.frequency || 0)) / (metrics.frequency > 0 ? 2 : 1); // Média simples
-          metrics.uniqueClicks += parseInt(stats.unique_clicks || 0);
-          
-          if (stats.action_values) {
-            const pv = stats.action_values.find(a => a.action_type === 'purchase');
-            if (pv) metrics.purchaseValue += parseFloat(pv.value || 0);
+    // Função recursiva para lidar com paginação da Meta (essencial para períodos longos como "Máximo")
+    const fetchAllInsights = async (url) => {
+      try {
+        const response = await fetch(url);
+        const fbRes = await response.json();
+        
+        if (fbRes.error) {
+          metaApiError = fbRes.error.message;
+          return;
+        }
+
+        if (fbRes.data) {
+          fbRes.data.forEach(stats => {
+            const dateStr = stats.date_start;
+            if (!dailyAggregated[dateStr]) dailyAggregated[dateStr] = { spent: 0, messages: 0 };
+            const spent = parseFloat(stats.spend || 0);
+            metrics.totalSpent += spent;
+            dailyAggregated[dateStr].spent += spent;
+            metrics.impressions += parseInt(stats.impressions || 0);
+            metrics.reach += parseInt(stats.reach || 0);
+            metrics.clicks += parseInt(stats.clicks || 0);
+            metrics.frequency = (metrics.frequency + parseFloat(stats.frequency || 0)) / (metrics.frequency > 0 ? 2 : 1);
+            metrics.uniqueClicks += parseInt(stats.unique_clicks || 0);
+            
+            if (stats.action_values) {
+              const pv = stats.action_values.find(a => a.action_type === 'purchase');
+              if (pv) metrics.purchaseValue += parseFloat(pv.value || 0);
+            }
+            if (stats.actions) {
+              stats.actions.forEach(a => {
+                const val = parseInt(a.value || 0);
+                const type = a.action_type;
+                if (type === 'onsite_conversion.messaging_conversation_started_7d' || 
+                    type === 'onsite_conversion.messaging_conversation_started' ||
+                    type === 'lead' || 
+                    type === 'contact') {
+                    metrics.msgConversations += val;
+                    dailyAggregated[dateStr].messages += val;
+                }
+                if (type === 'link_click') metrics.linkClicks += val;
+                if (type === 'purchase') metrics.purchases += val;
+                if (type === 'initiate_checkout') metrics.checkouts += val;
+                if (type === 'add_to_cart') metrics.cart += val;
+                if (type === 'landing_page_view') metrics.landingPageViews += val;
+                if (type === 'add_payment_info') metrics.addPaymentInfo += val;
+                if (type === 'follow' || type === 'page_like' || type === 'onsite_conversion.post_save') metrics.followers += val;
+                if (type === 'profile_visit' || type === 'instagram_profile_visit') metrics.profileVisits += val;
+                if (type === 'post_engagement') metrics.postEngagement += val;
+                if (type === 'page_engagement') metrics.pageEngagement += val;
+                if (type === 'post_reaction') metrics.postReactions += val;
+                if (type === 'comment') metrics.comments += val;
+                if (type === 'link_click') metrics.shares += val;
+                if (type === 'video_view' || type === 'video_p25_watched_actions') metrics.video25 += val;
+                if (type === 'video_p50_watched_actions') metrics.video50 += val;
+                if (type === 'video_p75_watched_actions') metrics.video75 += val;
+                if (type === 'video_p100_watched_actions') metrics.video100 += val;
+              });
+            }
+          });
+
+          // Se houver próxima página, busca recursivamente
+          if (fbRes.paging && fbRes.paging.next) {
+            await fetchAllInsights(fbRes.paging.next);
           }
-          if (stats.actions) {
-            stats.actions.forEach(a => {
-              const val = parseInt(a.value || 0);
-              const type = a.action_type;
-              if (type === 'onsite_conversion.messaging_conversation_started_7d' || 
-                  type === 'onsite_conversion.messaging_conversation_started' ||
-                  type === 'lead' || 
-                  type === 'contact') {
-                  metrics.msgConversations += val;
-                  dailyAggregated[dateStr].messages += val;
-              }
-              if (type === 'link_click') metrics.linkClicks += val;
-              if (type === 'purchase') metrics.purchases += val;
-              if (type === 'initiate_checkout') metrics.checkouts += val;
-              if (type === 'add_to_cart') metrics.cart += val;
-              if (type === 'landing_page_view') metrics.landingPageViews += val;
-              if (type === 'add_payment_info') metrics.addPaymentInfo += val;
-              if (type === 'follow' || type === 'page_like' || type === 'onsite_conversion.post_save') metrics.followers += val;
-              if (type === 'profile_visit' || type === 'instagram_profile_visit') metrics.profileVisits += val;
-              if (type === 'post_engagement') metrics.postEngagement += val;
-              if (type === 'page_engagement') metrics.pageEngagement += val;
-              if (type === 'post_reaction') metrics.postReactions += val;
-              if (type === 'comment') metrics.comments += val;
-              if (type === 'link_click') metrics.shares += val; // Na Meta share também pode ser link_click dependendo da versão, mas o correto é 'post_engagement' -> 'share'
-              if (type === 'video_view' || type === 'video_p25_watched_actions') metrics.video25 += val;
-              if (type === 'video_p50_watched_actions') metrics.video50 += val;
-              if (type === 'video_p75_watched_actions') metrics.video75 += val;
-              if (type === 'video_p100_watched_actions') metrics.video100 += val;
-            });
-          }
-        });
+        }
+      } catch (err) {
+        metaApiError = "Erro ao processar dados da Meta.";
       }
+    };
+
+    const initialUrl = `https://graph.facebook.com/v19.0/${fetchId}/insights?fields=spend,actions,action_values,reach,impressions,clicks,frequency,unique_clicks,unique_ctr&date_preset=${metaPeriod.includes('since') ? '' : metaPeriod}&time_range=${metaPeriod.includes('since') ? metaPeriod : ''}&time_increment=1&limit=500&access_token=${acc.accessToken}`;
+    
+    await fetchAllInsights(initialUrl);
+
+    try {
       const campUrl = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=status&access_token=${acc.accessToken}`;
       const campRes = await fetch(campUrl).then(r => r.json());
       if(campRes.data) campRes.data.forEach(c => c.status === 'ACTIVE' ? metrics.activeCamps++ : metrics.pausedCamps++);
-    } catch (err) { metaApiError = "Falha de conexão com os servidores da Meta."; }
+    } catch (err) { 
+      console.error('Erro ao buscar status de campanhas:', err);
+    }
   }
 
   // Vendas PDV
@@ -481,7 +997,7 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
       wherePDV = 'WHERE "createdAt" >= CURRENT_DATE - INTERVAL \'7 days\''; 
   }
   else if (periodo === 'mes') { 
-      wherePDV = "WHERE date_trunc('month', \"createdAt\") = date_trunc('month', current_date)"; 
+      wherePDV = "WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '30 days'"; 
   }
   else if (periodo === 'ontem') { 
       wherePDV = "WHERE DATE(\"createdAt\") = CURRENT_DATE - INTERVAL '1 day'"; 
@@ -726,11 +1242,29 @@ app.post('/api/generate-insights', async (req, res) => {
 // ---------------------------------------------------------
 app.post('/api/jarvis/chat', async (req, res) => {
   const { messages } = req.body;
+  const lastUserMessage = messages[messages.length - 1]?.content;
+
   try {
+    // 1. Salva a última mensagem do usuário se for nova (e não for um comando de sistema/saudação)
+    const isSystemCommand = lastUserMessage && (lastUserMessage.includes('Aja como se o sistema tivesse acabado de ser ativado') || lastUserMessage.includes('[FALA]'));
+    
+    if (lastUserMessage && !isSystemCommand) {
+      await pool.query('INSERT INTO "JarvisMessage" (role, content) VALUES ($1, $2)', ['user', lastUserMessage]);
+    }
+
+    // 2. Busca histórico RECENTE do banco para dar contexto real (Memória Permanente)
+    const historyRes = await pool.query('SELECT role, content FROM "JarvisMessage" ORDER BY "createdAt" DESC LIMIT 20');
+    const dbHistory = historyRes.rows.reverse();
+
+    // Mescla histórico do banco com as mensagens atuais da sessão (evita duplicidade e garante contexto)
+    // Para simplificar e garantir precisão, vamos usar o dbHistory como base + a mensagem atual
+    const contextualMessages = dbHistory;
+
     // Busca config de IA do banco
     const aiConfigRes = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
-    const systemPrompt = aiConfigRes.rows[0]?.systemPrompt;
-    const selectedModel = aiConfigRes.rows[0]?.model || "gpt-4o";
+    const config = aiConfigRes.rows[0] || {};
+    const systemPrompt = config.systemPrompt;
+    const selectedModel = config.model || "gpt-4o";
 
     // Puxa as métricas para múltiplos períodos para dar "visão total" ao Jarvis
     const [metricsHoje, metricsOntem, metrics7Dias, metrics30Dias, metricsMes] = await Promise.all([
@@ -770,22 +1304,49 @@ app.post('/api/jarvis/chat', async (req, res) => {
       }
     } catch (e) { console.error('Erro ao buscar campanhas para o Jarvis:', e); }
     
-    // CONTAGEM EM TEMPO REAL (BANCO INTERNO)
-    const leadsToday = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [new Date(new Date().setHours(0,0,0,0))]).then(r => parseInt(r.rows[0].count));
-    const salesToday = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt" >= $1', [new Date(new Date().setHours(0,0,0,0))]).then(r => parseInt(r.rows[0].count));
+    // CONTAGEM EM TEMPO REAL DO CRM (PARA TODOS OS PERÍODOS)
+    const leadsHojeDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= CURRENT_DATE').then(r => parseInt(r.rows[0].count));
+    const leadsOntemDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '1 day' AND \"createdAt\" < CURRENT_DATE").then(r => parseInt(r.rows[0].count));
+    const leads7DiasDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '7 days'").then(r => parseInt(r.rows[0].count));
+    const leads30DiasDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '30 days'").then(r => parseInt(r.rows[0].count));
+    const leadsMesDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE date_trunc('month', \"createdAt\") = date_trunc('month', CURRENT_DATE)").then(r => parseInt(r.rows[0].count));
+
+    const salesToday = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt" >= CURRENT_DATE').then(r => parseInt(r.rows[0].count));
     
-    const recentLeadsRes = await pool.query('SELECT name, status, platform FROM "Lead" ORDER BY "createdAt" DESC LIMIT 5');
-    const recentSalesRes = await pool.query('SELECT "valorTotal", "canalVenda", "tipoVenda" FROM "Sale" ORDER BY "createdAt" DESC LIMIT 5');
+    const recentLeadsRes = await pool.query(`
+      SELECT l.name, l.status, l.platform,
+        (
+          SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
+          FROM (
+            SELECT sender, content, "createdAt" as idx 
+            FROM "Message" 
+            WHERE "leadId" = l.id 
+            ORDER BY "createdAt" DESC 
+            LIMIT 10
+          ) m
+        ) as "chatHistory"
+      FROM "Lead" l 
+      ORDER BY l."lastInteractionAt" DESC LIMIT 5
+    `);
+    const recentSalesRes = await pool.query(`
+      SELECT s.*, 
+             l.platform as lead_platform, 
+             l."campaignName" as lead_campaign
+      FROM "Sale" s
+      LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
+      ORDER BY s."createdAt" DESC LIMIT 10
+    `);
     
     // Função auxiliar para formatar métricas completas para o Jarvis
-    const formatFullMetrics = (d, leadsReal = null) => {
+    const formatFullMetrics = (d, contatosReais = null) => {
       const m = d.metrics;
       const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
       const cpc = m.clicks > 0 ? m.totalSpent / m.clicks : 0;
       const roas = m.totalSpent > 0 ? d.pdv.faturamento / m.totalSpent : 0;
       return {
         gasto: Number(m.totalSpent).toFixed(2),
-        leads: leadsReal !== null ? Math.max(leadsReal, Number(m.msgConversations)) : Number(m.msgConversations),
+        leads_facebook: Number(m.msgConversations),
+        contatos_crm: contatosReais !== null ? contatosReais : 'N/A',
         faturamento: Number(d.pdv.faturamento).toFixed(2),
         cliques: m.clicks,
         impressoes: m.impressions,
@@ -798,24 +1359,42 @@ app.post('/api/jarvis/chat', async (req, res) => {
     const systemDiagnostics = {
       // CONTEXTO TEMPORAL ULTRA-DETALHADO
       timeContext: {
-        hoje: formatFullMetrics(metricsHoje, leadsToday),
-        ontem: formatFullMetrics(metricsOntem),
-        ultimos7Dias: formatFullMetrics(metrics7Dias),
-        ultimos30Dias: formatFullMetrics(metrics30Dias),
-        mesAtual: formatFullMetrics(metricsMes)
+        hoje: formatFullMetrics(metricsHoje, leadsHojeDB),
+        ontem: formatFullMetrics(metricsOntem, leadsOntemDB),
+        ultimos7Dias: formatFullMetrics(metrics7Dias, leads7DiasDB),
+        ultimos30Dias: formatFullMetrics(metrics30Dias, leads30DiasDB),
+        mesAtual: formatFullMetrics(metricsMes, leadsMesDB)
       },
       campaigns: campaignsContext,
       integrations: {
-        metaAds: metricsHoje.metaApiError ? `ERRO: ${metricsHoje.metaApiError}` : "Operacional",
-        pdv: "Online",
-        brain: !!process.env.OPENAI_API_KEY ? "Operacional" : "Offline"
+        metaAds: metricsHoje.metaApiError ? `ERRO: ${metricsHoje.metaApiError}` : "Conectado e Operacional",
+        pdv: recentSalesRes.rows.some(s => s.canalVenda === 'MercadoPhone') ? "Ativo (Vendas Recentes Detectadas)" : "Aguardando Primeiras Vendas",
+        brain: !!process.env.OPENAI_API_KEY ? "Conectado" : "Offline (Sem Chave API)"
       },
       recentLeads: recentLeadsRes.rows,
       recentSales: recentSalesRes.rows
     };
 
-    const jarvisTextReply = await generateJarvisChatResponse(messages, systemDiagnostics, systemPrompt, selectedModel);
+    const customGoals = await prisma.customGoal.findMany({ where: { active: true } });
     
+    // Busca Base de Conhecimento ativa
+    const kbFiles = await prisma.knowledgeFile.findMany({ where: { active: true } });
+    const knowledgeContext = kbFiles.map(f => `### DOCUMENTO: ${f.fileName} ###\n${f.content}`).join('\n\n');
+
+    const jarvisTextReply = await generateJarvisChatResponse(
+      contextualMessages, 
+      systemDiagnostics, 
+      config, 
+      selectedModel, 
+      customGoals,
+      knowledgeContext
+    );
+    
+    // 3. Salva a resposta do Jarvis no banco (Memória Eterna) - Apenas se não for saudação automática
+    if (!isSystemCommand) {
+      await pool.query('INSERT INTO "JarvisMessage" (role, content) VALUES ($1, $2)', ['assistant', jarvisTextReply]);
+    }
+
     res.json({ reply: jarvisTextReply });
   } catch (err) {
     console.error('Erro na Rota Jarvis Chat:', err);
@@ -834,6 +1413,28 @@ app.post('/api/jarvis/chat', async (req, res) => {
   }
 });
 
+// NOVO: Endpoint para carregar o histórico do Jarvis (Memória de Longo Prazo)
+app.get('/api/jarvis/history', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT role, content, "createdAt" FROM "JarvisMessage" ORDER BY "createdAt" ASC LIMIT 100');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar histórico do Jarvis:', err);
+    res.status(500).json({ error: 'Falha ao carregar memória do Jarvis' });
+  }
+});
+
+// NOVO: Endpoint para limpar todo o histórico do Jarvis
+app.delete('/api/jarvis/history', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "JarvisMessage"');
+    res.json({ message: 'Histórico expurgado com sucesso' });
+  } catch (err) {
+    console.error('Erro ao limpar histórico do Jarvis:', err);
+    res.status(500).json({ error: 'Falha ao limpar memória do Jarvis' });
+  }
+});
+
 // ---------------------------------------------------------
 // MERCADOPHONE WEBHOOK & META CAPI
 // ---------------------------------------------------------
@@ -847,7 +1448,7 @@ const sendToMetaCAPI = async (pixelId, eventData) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         data: [eventData],
-        test_event_code: process.env.META_TEST_EVENT_CODE // Opcional para testes
+        test_event_code: process.env.META_TEST_EVENT_CODE
       })
     });
     console.log('✅ Evento CAPI enviado para Meta!');
@@ -857,36 +1458,62 @@ const sendToMetaCAPI = async (pixelId, eventData) => {
 };
 
 app.post('/api/webhooks/mercadophone', async (req, res) => {
-  const { telefoneCliente, valorTotal, canalVenda = 'MercadoPhone', tipoVenda = 'Offline' } = req.body;
+  // Aceita variações de nomes de campos para maior compatibilidade
+  const body = req.body;
+  const telefoneCliente = body.telefoneCliente || body.telefone || body.phone;
+  const nomeCliente = body.nomeCliente || body.nome || body.customer_name;
+  const vendedor = body.vendedor || body.seller_name || body.vendedor_nome;
+  const produto = body.produto || body.product_name || body.item;
+  const valorTotal = body.valorTotal || body.valor || body.amount || body.total;
+  const lucro = body.lucro || body.profit || (parseFloat(valorTotal) * 0.2);
+  const canalVenda = body.canalVenda || body.canal_venda || body.canal || body.channel || 'MercadoPhone';
+  const tipoVenda = body.tipoVenda || body.tipo_venda || body.origem || body.sale_type || 'Offline';
+  const statusVenda = body.statusVenda || body.status_venda || body.status || 'Concluído';
+
+  console.log('📡 [WEBHOOK MERCADOPHONE] Corpo Completo:', JSON.stringify(body, null, 2));
 
   if (!telefoneCliente || !valorTotal) {
-    return res.status(400).json({ error: 'Dados incompletos: telefoneCliente e valorTotal são obrigatórios.' });
+    console.error('❌ [WEBHOOK MERCADOPHONE] Dados faltantes. Recebido:', body);
+    return res.status(400).json({ error: 'Dados obrigatórios ausentes (telefoneCliente/telefone, valorTotal/valor)' });
   }
 
   try {
-    // 1. Salva a Venda no Banco
+    // Trata o valorTotal caso venha como string formatada
+    let cleanValue = valorTotal;
+    if (typeof valorTotal === 'string') {
+        cleanValue = parseFloat(valorTotal.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.'));
+    }
+
     const saleRes = await pool.query(
-      'INSERT INTO "Sale" ("telefoneCliente", "valorTotal", "canalVenda", "tipoVenda") VALUES ($1, $2, $3, $4) RETURNING *',
-      [telefoneCliente, valorTotal, canalVenda, tipoVenda]
+      'INSERT INTO "Sale" ("telefoneCliente", "nomeCliente", "vendedor", "produto", "valorTotal", "lucro", "canalVenda", "tipoVenda", "statusVenda") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+      [telefoneCliente, nomeCliente, vendedor, produto, cleanValue, lucro, canalVenda, tipoVenda, statusVenda]
     );
 
-    console.log('💰 Nova Venda MercadoPhone:', saleRes.rows[0]);
-
-    // 2. Tenta vincular ao Lead para atribuição
+    // Lógica Inteligente de Cruzamento de Leads
     const cleanPhone = telefoneCliente.replace(/\D/g, '');
-    const leadRes = await pool.query('SELECT id FROM "Lead" WHERE phone LIKE $1 LIMIT 1', [`%${cleanPhone.slice(-8)}%`]);
-    
+    const leadRes = await pool.query(
+      'SELECT platform, id FROM "Lead" WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY "createdAt" DESC LIMIT 1', 
+      [cleanPhone, '55' + cleanPhone, cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone]
+    );
+
     if (leadRes.rows.length > 0) {
-      console.log(`🔗 Venda vinculada ao Lead ID: ${leadRes.rows[0].id}`);
-      await pool.query('UPDATE "Lead" SET status = \'Vendido\' WHERE id = $1', [leadRes.rows[0].id]);
-      await pool.query('UPDATE "Sale" SET "tipoVenda" = \'Trafego Pago\' WHERE id = $1', [saleRes.rows[0].id]);
+      console.log(`🎯 [WEBHOOK] Lead encontrado (${leadRes.rows[0].id}). Atualizando status...`);
+      
+      console.log(`🎯 [WEBHOOK] Lead encontrado (${leadRes.rows[0].id}). Sincronizando dados dinâmicos do PDV...`);
+      
+      // Atualiza o Lead: Status, Tag (Tipo de Venda) e Nome do Produto
+      await pool.query(
+        'UPDATE "Lead" SET status = $1, tags = $2, "productName" = $3, "updatedAt" = NOW() WHERE id = $4', 
+        ['Venda Concluída', [tipoVenda], produto, leadRes.rows[0].id]
+      );
     } else {
-      await pool.query('UPDATE "Sale" SET "tipoVenda" = \'Direto\' WHERE id = $1', [saleRes.rows[0].id]);
+      console.log(`⚠️ [WEBHOOK] Nenhum lead correspondente para o telefone: ${cleanPhone}`);
     }
 
     // 3. Envia para Meta CAPI (se o Pixel ID estiver configurado)
     const pixelId = process.env.META_PIXEL_ID;
     if (pixelId) {
+      const cleanPhone = telefoneCliente.replace(/\D/g, '');
       const crypto = await import('crypto');
       const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
       const eventData = {
@@ -896,7 +1523,7 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
           ph: [hashedPhone]
         },
         custom_data: {
-          value: parseFloat(valorTotal),
+          value: parseFloat(cleanValue),
           currency: 'BRL'
         },
         event_source_url: 'https://supercell-ai.com.br/offline-sale',
@@ -910,6 +1537,164 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
   } catch (err) {
     console.error('❌ Erro no Webhook MercadoPhone:', err);
     res.status(500).json({ error: 'Erro interno ao processar venda' });
+  }
+});
+
+// NOVO: Endpoint de Estatísticas do PDV (Espelho MercadoPhone)
+app.get('/api/pdv/dashboard', async (req, res) => {
+  const { startDate, endDate } = req.query;
+  try {
+    let dateFilter = 'WHERE "createdAt"::date = CURRENT_DATE';
+    let queryParams = [];
+
+    if (startDate && endDate) {
+      dateFilter = 'WHERE "createdAt"::date BETWEEN $1 AND $2';
+      queryParams = [startDate, endDate];
+    } else if (startDate) {
+      dateFilter = 'WHERE "createdAt"::date >= $1';
+      queryParams = [startDate];
+    }
+
+    // Métricas do Período
+    const statsRes = await pool.query(`
+      SELECT 
+        COALESCE(SUM("valorTotal"), 0) as faturamento,
+        COUNT(*) as qtd_vendas,
+        COALESCE(SUM("lucro"), 0) as lucro_total,
+        CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM("valorTotal"), 0) / COUNT(*) ELSE 0 END as ticket_medio,
+        CASE WHEN COALESCE(SUM("valorTotal"), 0) > 0 THEN (COALESCE(SUM("lucro"), 0) / COALESCE(SUM("valorTotal"), 1)) * 100 ELSE 0 END as perc_lucro
+      FROM "Sale"
+      ${dateFilter}
+    `, queryParams);
+
+    // Agrupamento por Tipo de Venda (Gráfico)
+    const typeStats = await pool.query(`
+      SELECT "tipoVenda" as name, COALESCE(SUM("valorTotal"), 0) as value
+      FROM "Sale"
+      ${dateFilter}
+      GROUP BY "tipoVenda"
+    `, queryParams);
+
+    // Ranking de Vendedores
+    const sellerStats = await pool.query(`
+      SELECT vendedor as name, COUNT(*) as sales, COALESCE(SUM("valorTotal"), 0) as total
+      FROM "Sale"
+      ${dateFilter} AND vendedor IS NOT NULL
+      GROUP BY vendedor
+      ORDER BY total DESC
+      LIMIT 5
+    `, queryParams);
+
+    // Top Produtos
+    const productStats = await pool.query(`
+      SELECT produto as name, COUNT(*) as count
+      FROM "Sale"
+      ${dateFilter} AND produto IS NOT NULL
+      GROUP BY produto
+      ORDER BY count DESC
+      LIMIT 5
+    `, queryParams);
+
+    // Vendas do Período
+    const recentSales = await pool.query(`
+      SELECT * FROM "Sale" 
+      ${dateFilter}
+      ORDER BY "createdAt" DESC 
+      LIMIT 20
+    `, queryParams);
+
+    res.json({
+      metrics: statsRes.rows[0],
+      byType: typeStats.rows,
+      bySeller: sellerStats.rows,
+      byProduct: productStats.rows,
+      recentSales: recentSales.rows
+    });
+  } catch (err) {
+    console.error('Erro no Dashboard PDV:', err);
+    res.status(500).json({ error: 'Falha ao buscar dados do PDV' });
+  }
+});
+
+app.get('/api/pdv/sync', async (req, res) => {
+  const API_URL = process.env.MERCADOPHONE_API_URL;
+  const TOKEN = process.env.MERCADOPHONE_API_TOKEN;
+
+  if (!API_URL || !TOKEN) {
+    return res.status(500).json({ error: 'Configurações do MercadoPhone ausentes no .env' });
+  }
+
+  try {
+    console.log('🔄 [SYNC] Iniciando sincronização ativa com MercadoPhone...');
+    
+    // Busca as últimas 500 vendas para garantir histórico
+    const mpRes = await fetch(`${API_URL}?class=VendaApiController&method=index`, {
+      method: 'POST',
+      headers: {
+        'Authorization': TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        limit: 500,
+        page: 1,
+        order: 'id',
+        direction: 'desc'
+      })
+    });
+
+    const mpData = await mpRes.json();
+    const sales = mpData.data?.itens || [];
+
+    let countNew = 0;
+    let countUpdated = 0;
+
+    for (const sale of sales) {
+      // Verifica se a venda já existe (usando o ID original do MercadoPhone)
+      // Como não temos a coluna originalId, vamos usar o createdAt + nomeCliente como check básico ou apenas tentar inserir e tratar erro
+      // Na verdade, vamos usar o ID que o MercadoPhone envia como nosso ID primário se possível, ou salvar em uma coluna.
+      // Vou tentar buscar pelo id (que agora sabemos que é o do MercadoPhone)
+      const existing = await pool.query('SELECT id FROM "Sale" WHERE id = $1', [sale.id]);
+      
+      const telefone = sale.cliente?.telefone || sale.cliente?.telefoneSecundario || '';
+      const nome = sale.clienteNome;
+      const valor = sale.totalVenda;
+      const vendedor = sale.vendedorNome;
+      const produto = sale.itens?.[0]?.produtoNome || 'Produto Indefinido';
+      const tipoVenda = sale.tipoVendaDescricao || 'Offline';
+      const createdAt = sale.dataVenda; // Formato "2026-05-09 16:13:00"
+      const lucro = valor * 0.2; // Estimativa se não vier na API
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          'INSERT INTO "Sale" (id, "telefoneCliente", "nomeCliente", "vendedor", "produto", "valorTotal", "lucro", "canalVenda", "tipoVenda", "statusVenda", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+          [sale.id, telefone, nome, vendedor, produto, valor, lucro, 'MercadoPhone', tipoVenda, 'Concluído', createdAt]
+        );
+        countNew++;
+
+        // Auto-move lead se existir (Busca Resiliente)
+        const cleanPhone = telefone.replace(/\D/g, '');
+        if (cleanPhone) {
+          const leadSearch = await pool.query(
+            'SELECT id FROM "Lead" WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY "createdAt" DESC LIMIT 1', 
+            [cleanPhone, '55' + cleanPhone, cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone]
+          );
+          
+          if (leadSearch.rows.length > 0) {
+            await pool.query(
+              'UPDATE "Lead" SET status = $1, tags = $2, "productName" = $3, "updatedAt" = NOW() WHERE id = $4', 
+              ['Venda Concluída', [tipoVenda], produto, leadSearch.rows[0].id]
+            );
+          }
+        }
+      }
+    }
+
+    console.log(`✅ [SYNC] Sincronização concluída. Novas: ${countNew}`);
+    res.json({ status: 'success', new_sales: countNew, total_processed: sales.length });
+
+  } catch (err) {
+    console.error('❌ [SYNC] Erro ao sincronizar:', err);
+    res.status(500).json({ error: 'Falha na sincronização' });
   }
 });
 
@@ -976,24 +1761,162 @@ app.get('/api/ai-config', async (req, res) => {
 });
 
 app.post('/api/ai-config', async (req, res) => {
-  const { systemPrompt, model } = req.body;
+  const { 
+    systemPrompt, 
+    model, 
+    markupPerUnit, 
+    targetConversionRate, 
+    cpaThreshold, 
+    ctrThreshold, 
+    weeklyMessageGoal 
+  } = req.body;
+  
   try {
     const check = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
     if (check.rows.length === 0) {
         await pool.query(
-            'INSERT INTO "AiConfig" (id, "systemPrompt", model, "updatedAt") VALUES ($1, $2, $3, NOW())',
-            ['default', systemPrompt, model || 'gpt-4o']
+            `INSERT INTO "AiConfig" (
+                id, "systemPrompt", model, "markupPerUnit", 
+                "targetConversionRate", "cpaThreshold", "ctrThreshold", 
+                "weeklyMessageGoal", "updatedAt"
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+            [
+                'default', systemPrompt, model || 'gpt-4o', 
+                markupPerUnit || 0, targetConversionRate || 0, 
+                cpaThreshold || 0, ctrThreshold || 0, 
+                weeklyMessageGoal || 0
+            ]
         );
     } else {
         await pool.query(
-            'UPDATE "AiConfig" SET "systemPrompt" = $1, "model" = $2, "updatedAt" = NOW() WHERE id = $3',
-            [systemPrompt, model || 'gpt-4o', 'default']
+            `UPDATE "AiConfig" SET 
+                "systemPrompt" = $1, 
+                "model" = $2, 
+                "markupPerUnit" = $3, 
+                "targetConversionRate" = $4, 
+                "cpaThreshold" = $5, 
+                "ctrThreshold" = $6, 
+                "weeklyMessageGoal" = $7, 
+                "updatedAt" = NOW() 
+            WHERE id = $8`,
+            [
+                systemPrompt, model || 'gpt-4o', 
+                markupPerUnit || 0, targetConversionRate || 0, 
+                cpaThreshold || 0, ctrThreshold || 0, 
+                weeklyMessageGoal || 0,
+                'default'
+            ]
         );
     }
     res.json({ message: 'Configuração salva com sucesso' });
   } catch (err) {
     console.error('Erro ao salvar config de IA:', err);
     res.status(500).json({ error: 'Erro ao salvar config de IA' });
+  }
+});
+
+// --- Rotas de Metas Dinâmicas ---
+app.get('/api/custom-goals', async (req, res) => {
+  try {
+    const goals = await pool.query('SELECT * FROM "CustomGoal" ORDER BY "createdAt" DESC');
+    res.json(goals.rows);
+  } catch (err) {
+    console.error('Erro ao buscar metas dinâmicas:', err);
+    res.status(500).json({ error: 'Erro ao buscar metas' });
+  }
+});
+
+app.post('/api/custom-goals', async (req, res) => {
+  const { name, value, unit, period } = req.body;
+  try {
+    const id = crypto.randomUUID();
+    const result = await pool.query(
+      'INSERT INTO "CustomGoal" (id, name, value, unit, period, active, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *',
+      [id, name, String(value), unit || null, period || null, true]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erro ao criar meta dinâmica:', err);
+    res.status(500).json({ error: 'Erro ao criar meta' });
+  }
+});
+
+app.delete('/api/custom-goals/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM "CustomGoal" WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao deletar meta dinâmica:', err);
+    res.status(500).json({ error: 'Erro ao deletar meta' });
+  }
+});
+
+// --- Rotas de Base de Conhecimento ---
+app.get('/api/knowledge', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, "fileName", "fileType", "createdAt", active FROM "KnowledgeFile" ORDER BY "createdAt" DESC'
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar base de conhecimento' });
+  }
+});
+
+app.post('/api/knowledge/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+
+  try {
+    console.log('📂 [KNOWLEDGE] Recebido arquivo:', req.file.originalname, 'Tipo:', req.file.mimetype);
+    let content = '';
+    
+    const isPdf = req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf');
+    const isTxt = req.file.mimetype === 'text/plain' || req.file.originalname.toLowerCase().endsWith('.txt');
+
+    if (isPdf) {
+      console.log('📄 [KNOWLEDGE] Processando PDF...');
+      if (!pdfParser) {
+        throw new Error('O motor de leitura de PDF não está disponível no servidor.');
+      }
+      const parser = new pdfParser({ data: req.file.buffer });
+      const result = await parser.getText();
+      content = result.text;
+    } else if (isTxt) {
+      console.log('📝 [KNOWLEDGE] Processando TXT...');
+      content = req.file.buffer.toString('utf-8');
+    } else {
+      console.warn('⚠️ [KNOWLEDGE] Formato não suportado:', req.file.mimetype, req.file.originalname);
+      return res.status(400).json({ error: `Formato ${req.file.mimetype} não suportado. Use PDF ou TXT.` });
+    }
+
+    if (!content || content.trim().length === 0) {
+      console.error('❌ [KNOWLEDGE] Conteúdo extraído vazio!');
+      return res.status(400).json({ error: 'O arquivo parece estar vazio ou não pôde ser lido.' });
+    }
+
+    console.log(`✅ [KNOWLEDGE] Texto extraído (${content.length} caracteres). Salvando no banco...`);
+
+    const id = crypto.randomUUID();
+    const result = await pool.query(
+      'INSERT INTO "KnowledgeFile" (id, "fileName", content, "fileType", active, "updatedAt") VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id, "fileName", "fileType", "createdAt"',
+      [id, req.file.originalname, content, req.file.mimetype, true]
+    );
+
+    console.log('🎯 [KNOWLEDGE] Arquivo memorizado com sucesso! ID:', id);
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ [KNOWLEDGE] Erro crítico no upload:', err);
+    res.status(500).json({ error: `Erro ao processar arquivo: ${err.message}` });
+  }
+});
+
+app.delete('/api/knowledge/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "KnowledgeFile" WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar arquivo.' });
   }
 });
 
@@ -1030,7 +1953,7 @@ app.get('/api/campaigns', async (req, res) => {
     const metaPeriods = {
       'hoje': 'today',
       '7dias': 'last_7d',
-      'mes': 'this_month',
+      'mes': 'last_30d',
       'maximo': 'maximum'
     };
     let metaPeriod = metaPeriods[periodo] || periodo;
@@ -1115,37 +2038,6 @@ app.get('/api/campaigns', async (req, res) => {
     }
 });
 
-app.post('/api/webhooks/mercadophone', async (req, res) => {
-  const { telefoneCliente, valorTotal, canalVenda, tipoVenda } = req.body;
-  try {
-    // 1. Limpa o valor para garantir que seja um número (Trata R$, vírgulas e pontos)
-    let cleanValue = 0;
-    if (valorTotal) {
-        if (typeof valorTotal === 'string') {
-            cleanValue = parseFloat(valorTotal.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.'));
-        } else {
-            cleanValue = parseFloat(valorTotal);
-        }
-    }
-
-    // 2. Anonimiza o telefone para segurança (SHA-256)
-    const crypto = await import('crypto');
-    const telefoneHash = crypto.createHash('sha256').update(telefoneCliente || '').digest('hex');
-
-    // 3. Salva no banco de dados com as novas tags
-    await pool.query(
-        'INSERT INTO "Sale" ("telefoneCliente", "valorTotal", "canalVenda", "tipoVenda") VALUES ($1, $2, $3, $4)', 
-        [telefoneHash, cleanValue, canalVenda || 'Balcão', tipoVenda || 'Normal']
-    );
-    
-    console.log(`\n[WEBHOOK PDV] Venda Processada: R$ ${cleanValue} | Canal: ${canalVenda} | Tipo: ${tipoVenda}`);
-    res.json({ status: 'sucesso', valor: cleanValue });
-  } catch (err) { 
-    console.error('[WEBHOOK PDV] Erro:', err);
-    res.status(500).json({ error: 'Erro ao processar venda' }); 
-  }
-});
-
 // OUTRAS ROTAS
 app.get('/api/bms', async (req, res) => {
     const r = await pool.query('SELECT id, name, "bmId", "createdAt" FROM "BusinessManager" ORDER BY "createdAt" DESC');
@@ -1202,16 +2094,16 @@ app.post('/api/bms', async (req, res) => {
 app.delete('/api/bms/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // 1. Deletar Leads associados às AdAccounts desta BM
-        await pool.query('DELETE FROM "Lead" WHERE "adAccountId" IN (SELECT id FROM "AdAccount" WHERE "bmId" = $1)', [id]);
-        
+        // 1. Desvincular Leads associados às AdAccounts desta BM (Para não perder os leads)
+        await pool.query('UPDATE "Lead" SET "adAccountId" = NULL WHERE "adAccountId" IN (SELECT id FROM "AdAccount" WHERE "bmId" = $1)', [id]);
+
         // 2. Deletar AdAccounts da BM
         await pool.query('DELETE FROM "AdAccount" WHERE "bmId" = $1', [id]);
         
         // 3. Deletar a BM
         await pool.query('DELETE FROM "BusinessManager" WHERE id = $1', [id]);
         
-        res.json({ message: 'BM e dados associados removidos com sucesso!' });
+        res.json({ message: 'BM e AdAccounts removidas com sucesso! Os leads foram preservados.' });
     } catch (err) {
         console.error('Erro ao remover BM:', err);
         res.status(500).json({ error: 'Erro ao remover BM e dados vinculados.' });
@@ -1220,20 +2112,93 @@ app.delete('/api/bms/:id', async (req, res) => {
 
 app.get('/api/leads', async (req, res) => {
   try {
+    // Primeiro limpamos nomes genéricos se houver handle (Correção retroativa)
+    await pool.query(`UPDATE "Lead" SET name = "instagramHandle" WHERE name LIKE 'IG User%' AND "instagramHandle" IS NOT NULL`);
+    
     const r = await pool.query(`
-      SELECT l.*, a.name as "adAccountName", s."tipoVenda" as "productName"
+      SELECT l.*, a.name as "adAccountName",
+        (SELECT content FROM "Message" WHERE "leadId" = l.id ORDER BY "createdAt" DESC LIMIT 1) as "lastMessage"
       FROM "Lead" l 
-      JOIN "AdAccount" a ON l."adAccountId" = a.id 
-      LEFT JOIN (
-        SELECT DISTINCT ON ("telefoneCliente") "telefoneCliente", "tipoVenda"
-        FROM "Sale"
-        ORDER BY "telefoneCliente", "createdAt" DESC
-      ) s ON l.phone = s."telefoneCliente"
-      ORDER BY l."createdAt" DESC
+      LEFT JOIN "AdAccount" a ON l."adAccountId" = a.id 
+      ORDER BY l."lastInteractionAt" DESC
     `);
-    res.json(r.rows);
+
+    // Lógica de Temperatura em tempo real
+    const now = new Date();
+    const leadsComTemp = r.rows.map(lead => {
+      const lastInt = new Date(lead.lastInteractionAt || lead.createdAt);
+      const diffHours = (now - lastInt) / (1000 * 60 * 60);
+      
+      let currentTemp = 'Quente';
+      if (diffHours > 48) currentTemp = 'Frio';
+      else if (diffHours > 12) currentTemp = 'Morno';
+      
+      return { ...lead, temperature: currentTemp };
+    });
+
+    res.json(leadsComTemp);
   } catch (err) {
+    console.error('Erro ao buscar leads:', err);
     res.status(500).json({ error: 'Erro ao buscar leads' });
+  }
+});
+
+app.get('/api/leads/stats', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const leadsHoje = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt"::date = $1', [today]);
+    const vendasHoje = await pool.query('SELECT COUNT(*), SUM("valorTotal") FROM "Sale" WHERE "createdAt"::date = $1', [today]);
+    
+    // Calcula conversão geral (Simplificado)
+    const totalLeads = await pool.query('SELECT COUNT(*) FROM "Lead"');
+    const totalVendas = await pool.query('SELECT COUNT(*) FROM "Sale"');
+    const conversao = totalLeads.rows[0].count > 0 ? (totalVendas.rows[0].count / totalLeads.rows[0].count) * 100 : 0;
+
+    res.json({
+      leadsHoje: parseInt(leadsHoje.rows[0].count),
+      vendasHoje: parseInt(vendasHoje.rows[0].count),
+      valorVendasHoje: parseFloat(vendasHoje.rows[0].sum || 0),
+      conversao: conversao.toFixed(1)
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+  }
+});
+
+app.get('/api/media/:id', async (req, res) => {
+  const { id } = req.params;
+  const rawMetaToken = process.env.META_ACCESS_TOKEN || '';
+  const META_TOKEN = rawMetaToken.trim().replace(/^["']|["']$/g, '');
+  
+  try {
+    const mediaRes = await fetch(`https://graph.facebook.com/v19.0/${id}?access_token=${META_TOKEN}`);
+    const mediaData = await mediaRes.json();
+    
+    if (mediaData.url) {
+      const downloadRes = await fetch(mediaData.url, {
+        headers: { 'Authorization': `Bearer ${META_TOKEN}` }
+      });
+      const contentType = downloadRes.headers.get('Content-Type');
+      res.setHeader('Content-Type', contentType);
+      const buffer = await downloadRes.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    } else {
+      res.status(404).json({ error: 'Mídia não encontrada' });
+    }
+  } catch (err) {
+    console.error('Erro no proxy de mídia:', err);
+    res.status(500).json({ error: 'Erro ao buscar mídia' });
+  }
+});
+
+app.patch('/api/leads/:id/read', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('UPDATE "Lead" SET "hasUnread" = FALSE, "unreadCount" = 0 WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar status de leitura' });
   }
 });
 
@@ -1246,6 +2211,147 @@ app.patch('/api/leads/:id/status', async (req, res) => {
   } catch (err) {
     console.error('Erro ao atualizar status do lead:', err);
     res.status(500).json({ error: 'Erro ao atualizar status' });
+  }
+});
+
+app.patch('/api/leads/:id/tags', async (req, res) => {
+  const { id } = req.params;
+  const { tags } = req.body;
+  try {
+    await pool.query('UPDATE "Lead" SET tags = $1, "updatedAt" = NOW() WHERE id = $2', [tags, id]);
+    res.json({ message: 'Tags atualizadas com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar tags' });
+  }
+});
+
+app.post('/api/leads/:id/messages', async (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+
+  if (!content) return res.status(400).json({ error: 'Conteúdo da mensagem é obrigatório' });
+
+  try {
+    // 1. Busca o Lead para saber a plataforma e o ID de destino
+    const leadRes = await pool.query('SELECT * FROM "Lead" WHERE id = $1', [id]);
+    if (leadRes.rows.length === 0) return res.status(404).json({ error: 'Lead não encontrado' });
+
+    const lead = leadRes.rows[0];
+    const platform = lead.platform;
+    const recipientId = lead.phone; // No Instagram, phone guarda o IGSID
+
+    console.log(`[SEND MESSAGE] Enviando para ${lead.name} (${platform}) - ID: ${recipientId}`);
+
+    // 2. Envio via API (Instagram)
+    if (platform === 'instagram') {
+      const rawMetaToken = process.env.META_ACCESS_TOKEN || '';
+      const META_TOKEN = rawMetaToken.trim().replace(/^["']|["']$/g, '');
+
+      // A) Precisamos do Token da PÁGINA, não o do Usuário/Sistema direto para enviar mensagens
+      const accountsRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${META_TOKEN}`);
+      const accountsData = await accountsRes.json();
+      
+      if (!accountsData.data || accountsData.data.length === 0) {
+        console.error('[IG SEND ERROR] Nenhuma página vinculada ao token encontrada.');
+        return res.status(500).json({ error: 'Falha na permissão: Nenhuma página Meta vinculada ao token.' });
+      }
+
+      const pageToken = accountsData.data[0].access_token;
+      const pageId = accountsData.data[0].id;
+
+      const url = `https://graph.facebook.com/v19.0/${pageId}/messages?access_token=${pageToken}`;
+      const payload = {
+        recipient: { id: recipientId },
+        message: { text: content }
+      };
+
+      const fbRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const fbData = await fbRes.json();
+
+      if (fbData.error) {
+        console.error('[IG SEND ERROR]', fbData.error);
+        return res.status(500).json({ error: 'Erro ao enviar mensagem via Instagram', details: fbData.error.message });
+      }
+
+      // Salva no banco com o message_id retornado para evitar duplicidade no echo
+      const metaMid = fbData.message_id;
+      const msgRes = await pool.query(
+        'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, \'agent\', $2, NOW(), $3) ON CONFLICT (mid) DO NOTHING RETURNING *',
+        [content, id, metaMid]
+      );
+      
+      // Automação de Status: Muda para 'Em Atendimento' se for a primeira resposta
+      if (lead.status === 'Novo') {
+        await pool.query('UPDATE "Lead" SET status = $1, "updatedAt" = NOW() WHERE id = $2', ['Em Atendimento', id]);
+      }
+
+      return res.json(msgRes.rows[0]);
+    } else if (platform === 'whatsapp') {
+      // Integração WhatsApp via Z-API
+      const zapiInstance = (process.env.ZAPI_INSTANCE_ID || '').replace(/['"]/g, '').trim();
+      const zapiToken = (process.env.ZAPI_INSTANCE_TOKEN || '').replace(/['"]/g, '').trim();
+      const zapiClientToken = (process.env.ZAPI_CLIENT_TOKEN || '').replace(/['"]/g, '').trim();
+
+      if (!zapiInstance || !zapiToken) {
+        return res.status(500).json({ error: 'Z-API não configurada ou credenciais ausentes no .env' });
+      }
+
+      console.log(`[Z-API SEND] Enviando para ${recipientId}`);
+      
+      const sendUrl = `https://api.z-api.io/instances/${zapiInstance}/token/${zapiToken}/send-text`;
+      
+      const waRes = await fetch(sendUrl, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Client-Token': zapiClientToken
+        },
+        body: JSON.stringify({
+          phone: recipientId,
+          message: content
+        })
+      });
+
+      const waData = await waRes.json();
+
+      if (!waRes.ok) {
+        console.error('[Z-API SEND ERROR]', waData);
+        return res.status(500).json({ error: 'Erro ao enviar via Z-API', details: waData });
+      }
+
+      const waMid = waData.messageId || `zapi-${Date.now()}`;
+      const msgRes = await pool.query(
+        'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, \'agent\', $2, NOW(), $3) ON CONFLICT (mid) DO NOTHING RETURNING *',
+        [content, id, waMid]
+      );
+      
+      if (lead.status === 'Novo') {
+        await pool.query('UPDATE "Lead" SET status = $1, "updatedAt" = NOW() WHERE id = $2', ['Em Atendimento', id]);
+      }
+
+      return res.json(msgRes.rows[0]);
+    }
+
+    // 3. Salva no Histórico do Banco de Dados
+    const msgRes = await pool.query(
+      'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt") VALUES (gen_random_uuid(), $1, \'agent\', $2, NOW()) RETURNING *',
+      [content, id]
+    );
+
+    // 4. Automação de Status: Muda para 'Em Atendimento' se for a primeira resposta
+    if (lead.status === 'Novo') {
+      await pool.query('UPDATE "Lead" SET status = $1, "updatedAt" = NOW() WHERE id = $2', ['Em Atendimento', id]);
+    }
+
+    res.json(msgRes.rows[0]);
+  } catch (err) {
+    console.error('Erro ao processar envio de mensagem:', err);
+    res.status(500).json({ error: 'Erro interno ao enviar mensagem' });
   }
 });
 
@@ -1291,7 +2397,6 @@ app.delete('/api/custom-templates/:id', async (req, res) => {
 // ---------------------------------------------------------
 // JARVIS STT (Whisper - OpenAI)
 // ---------------------------------------------------------
-const upload = multer({ storage: multer.memoryStorage() });
 
 app.post('/api/jarvis/transcribe', upload.single('audio'), async (req, res) => {
   if (!process.env.OPENAI_API_KEY) {
@@ -1505,12 +2610,23 @@ app.post('/api/settings/goals', async (req, res) => {
   }
 });
 
-// HANDLER GLOBAL 404 (Para depuração)
+// Listar mensagens de um lead
+app.get('/api/leads/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM "Message" WHERE "leadId" = $1 ORDER BY "createdAt" ASC', [id]);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HANDLER GLOBAL 404
 app.use((req, res) => {
   console.log(`⚠️ Rota não encontrada: ${req.method} ${req.url}`);
   res.status(404).json({ error: 'Rota não encontrada no servidor backend', path: req.url });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });

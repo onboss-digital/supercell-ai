@@ -35,31 +35,150 @@ const TypewriterText = ({ text, animate = true }) => {
 function Reports() {
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [systemState, setSystemState] = useState("SIS.AGUARDA"); // SIS.AGUARDA, USER.RECV, SIS.RESP
+  const isJarvisSpeakingRef = useRef(false);
+  const recognitionRef = useRef(null);
+
+  const [systemState, setSystemState] = useState("SIS.ONLINE"); // SIS.AGUARDA, USER.RECV, SIS.RESP
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
   const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   
-  const [messages, setMessages] = useState(() => {
-    try {
-      const saved = localStorage.getItem('jarvis_current_session');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map(m => ({ ...m, animate: false }));
-      }
-      return [];
-    } catch (e) { return []; }
-  });
+  const [messages, setMessages] = useState([]);
   
-  const [chatHistory, setChatHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem('jarvis_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) { return []; }
-  });
+  const [chatHistory, setChatHistory] = useState([]);
   
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [metaStatus, setMetaStatus] = useState({ ok: true, msg: 'LINK_ATIVO' });
+
+  // Carregar histórico real do banco de dados (Memória Permanente)
+  useEffect(() => {
+    const initJarvis = async () => {
+      try {
+        // 1. Busca Histórico
+        const res = await fetch(`${API_URL}/api/jarvis/history`);
+        const data = await res.json();
+        let loadedMessages = [];
+        
+        if (Array.isArray(data)) {
+          loadedMessages = data.map(m => ({
+            role: m.role === 'user' ? 'user' : 'jarvis',
+            content: m.content,
+            time: new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            animate: false
+          }));
+          setMessages(loadedMessages);
+        }
+
+        // 2. Verifica se precisa de Saudação (Sessão nova e SEM histórico)
+        const alreadyGreeted = sessionStorage.getItem('jarvis_voice_greeted');
+        if (!alreadyGreeted && loadedMessages.length === 0) {
+          fetchGreeting(loadedMessages);
+        }
+      } catch (err) {
+        console.error('Erro ao inicializar Jarvis:', err);
+      }
+    };
+    
+    initJarvis();
+  }, []);
+
+  const fetchGreeting = async (currentMessages) => {
+    setSystemState("SIS.PROC");
+    try {
+      const res = await fetch(`${API_URL}/api/jarvis/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: [{ role: 'user', content: 'Aja como se o sistema tivesse acabado de ser ativado. Na tag [FALA], dê uma saudação curta, respeitosa e em aberto, no estilo "Bem-vindo de volta Senhor, como posso servi-lo hoje?". Na tag [TELA], confirme apenas que os sistemas de análise de tráfego e vendas estão online aguardando os dados ou comandos.' }] 
+        })
+      });
+      const data = await res.json();
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      
+      let replyText = data.reply || 'Central offline.';
+      const transicaoMatch = replyText.match(/\[TRANSICAO\]([\s\S]*?)\[/i) || replyText.match(/\[TRANSICAO\]([\s\S]*)$/i);
+      const falaMatch = replyText.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|$)/i);
+      const telaMatch = replyText.match(/\[TELA\]([\s\S]*)/i);
+
+      let transicaoText = transicaoMatch ? transicaoMatch[1].trim() : null;
+      let spokenText = falaMatch ? falaMatch[1].trim() : replyText;
+      let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
+
+      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: timeStr, animate: true }]);
+      
+      setSystemState("SIS.RESP");
+      
+      const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';
+
+      const playBrowserFallback = (text, isTransition = false) => {
+        console.log('🌐 [JARVIS GREETING] Usando voz nativa do navegador...');
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
+        if (googlePt) utterance.voice = googlePt;
+        utterance.onend = () => {
+          if (isTransition) {
+            console.log('🔄 [JARVIS GREETING] Transição nativa concluída.');
+            setTimeout(playMainFala, 500);
+          } else {
+            console.log('✅ [JARVIS GREETING] Saudação nativa concluída.');
+            setSystemState("SIS.AGUARDA");
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const playMainFala = () => {
+        if (voicePreference === 'browser') {
+          playBrowserFallback(spokenText);
+          return;
+        }
+        console.log('🔊 [JARVIS GREETING] Tentando falar via API:', spokenText);
+        const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+        audio.onended = () => {
+          console.log('✅ [JARVIS GREETING] Saudação da API concluída.');
+          setSystemState("SIS.AGUARDA");
+        };
+        audio.play().then(() => {
+          console.log('▶️ [JARVIS GREETING] Reproduzindo áudio da API...');
+        }).catch(e => {
+          console.warn("⚠️ [JARVIS GREETING] Falha na API, mudando para voz nativa...");
+          playBrowserFallback(spokenText);
+        });
+      };
+
+      if (transicaoText) {
+        if (voicePreference === 'browser') {
+          playBrowserFallback(transicaoText, true);
+        } else {
+          console.log('📡 [JARVIS GREETING] Tocando transição:', transicaoText);
+          const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(transicaoText)}`;
+          const transicaoAudio = new Audio(transicaoUrl);
+          currentAudioRef.current = transicaoAudio;
+          transicaoAudio.onended = () => {
+            console.log('🔄 [JARVIS GREETING] Transição concluída, iniciando saudação principal...');
+            setTimeout(playMainFala, 500);
+          };
+          transicaoAudio.play().catch(e => {
+            console.error("❌ [JARVIS GREETING] Erro ao tocar áudio de transição da saudação", e);
+            playMainFala();
+          });
+        }
+      } else {
+        playMainFala();
+      }
+      sessionStorage.setItem('jarvis_voice_greeted', 'true');
+    } catch (error) {
+      console.error(error);
+      setSystemState("SIS.AGUARDA");
+    }
+  };
 
   const messagesEndRef = useRef(null);
   const hasGreetedRef = useRef(messages.length > 0);
@@ -112,13 +231,7 @@ function Reports() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('jarvis_current_session', JSON.stringify(messages));
-  }, [messages]);
-
-  useEffect(() => {
-    localStorage.setItem('jarvis_history', JSON.stringify(chatHistory));
-  }, [chatHistory]);
+  // Removido o salvamento local para usar persistência de banco de dados
 
   const startNewConversation = () => {
     if (messages.length > 1) {
@@ -134,59 +247,18 @@ function Reports() {
     setIsHistoryOpen(false);
   };
 
-  const deleteSession = (e, id) => {
-    e.stopPropagation();
-    setChatHistory(prev => prev.filter(session => session.id !== id));
+  const deleteHistory = async () => {
+    if (!window.confirm('Tem certeza que deseja EXPURGAR todo o histórico estratégico do banco de dados? Esta ação é irreversível.')) return;
+    try {
+      await fetch(`${API_URL}/api/jarvis/history`, { method: 'DELETE' });
+      setMessages([]);
+      showNotification('success', 'MEMÓRIA EXPURGADA', 'Todo o histórico foi removido do núcleo central.');
+    } catch (err) {
+      console.error('Erro ao limpar banco:', err);
+    }
   };
 
-  useEffect(() => {
-    if (messages.length === 0 && !hasGreetedRef.current) {
-      hasGreetedRef.current = true;
-      const fetchGreeting = async () => {
-        setSystemState("SIS.PROC");
-        try {
-          const res = await fetch(`${API_URL}/api/jarvis/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              messages: [{ role: 'user', content: 'Aja como se o sistema tivesse acabado de ser ativado. Na tag [FALA], dê uma saudação curta, respeitosa e em aberto, no estilo "Bem-vindo de volta Senhor, como posso servi-lo hoje?". Na tag [TELA], confirme apenas que os sistemas de análise de tráfego e vendas estão online aguardando os dados ou comandos.' }] 
-            })
-          });
-          const data = await res.json();
-          const now = new Date();
-          const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-          
-          let replyText = data.reply || 'Central offline.';
-          let spokenText = replyText;
-          let displayText = replyText;
-
-          const falaMatch = replyText.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|$)/i);
-          const telaMatch = replyText.match(/\[TELA\]([\s\S]*)/i);
-
-          if (falaMatch) {
-            spokenText = falaMatch[1].trim();
-            displayText = `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}`;
-          }
-
-          setMessages([{ role: 'jarvis', content: displayText, time: timeStr, animate: true }]);
-          
-          // Fala a saudação por Streaming instantâneo (Apenas a parte [FALA])
-          const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
-          const audio = new Audio(audioUrl);
-          currentAudioRef.current = audio;
-          audio.onended = () => setSystemState("SIS.AGUARDA");
-          audio.play().catch(e => {
-            console.error("Erro ao tocar áudio", e);
-            setSystemState("SIS.AGUARDA");
-          });
-        } catch (error) {
-          console.error(error);
-          setSystemState("SIS.AGUARDA");
-        }
-      };
-      fetchGreeting();
-    }
-  }, [messages.length]);
+  // Removido o useEffect antigo de saudação, agora integrado no initJarvis
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -219,26 +291,24 @@ function Reports() {
         currentAudioRef.current = audio;
         
         audio.onplay = () => setIsJarvisSpeaking(true);
-        audio.onended = () => setIsJarvisSpeaking(false);
-        
-        audio.play().catch(e => console.error("Error playing Jarvis voice:", e));
-
-        // Aumentar a música de fundo após o efeito de tecnologia (aprox 8s)
-        setTimeout(() => {
-          if (backgroundMusicRef.current) {
-            // Fade suave para cima
+        audio.onended = () => {
+          setIsJarvisSpeaking(false);
+          // Aumentar a música de fundo suavemente após ele terminar de falar
+          if (introMusicRef.current) {
             let vol = 0.25;
             const interval = setInterval(() => {
               vol += 0.05;
-              if (vol >= 0.6) {
-                backgroundMusicRef.current.volume = 0.6;
+              if (vol >= 0.8) {
+                introMusicRef.current.volume = 0.8;
                 clearInterval(interval);
               } else {
-                backgroundMusicRef.current.volume = vol;
+                introMusicRef.current.volume = vol;
               }
             }, 100);
           }
-        }, 8000);
+        };
+        
+        audio.play().catch(e => console.error("Error playing Jarvis voice:", e));
       }, 2000);
 
       setInputText("");
@@ -268,21 +338,18 @@ function Reports() {
       let replyText = data.reply;
       
       if (!replyText) {
-        // Se não veio resposta, mas veio um erro específico do backend
         const errTitle = data.error || 'Erro na central de processamento';
         const errSuggestion = data.suggestion ? `\n\nSugestão: ${data.suggestion}` : '';
         replyText = `> ${errTitle}${errSuggestion}`;
       }
-      let spokenText = replyText;
-      let displayText = replyText;
 
+      const transicaoMatch = replyText.match(/\[TRANSICAO\]([\s\S]*?)\[/i) || replyText.match(/\[TRANSICAO\]([\s\S]*)$/i);
       const falaMatch = replyText.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|$)/i);
       const telaMatch = replyText.match(/\[TELA\]([\s\S]*)/i);
 
-      if (falaMatch) {
-        spokenText = falaMatch[1].trim();
-        displayText = `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}`;
-      }
+      let transicaoText = transicaoMatch ? transicaoMatch[1].trim() : null;
+      let spokenText = falaMatch ? falaMatch[1].trim() : replyText;
+      let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
 
       const respTime = new Date();
       const respTimeStr = `${respTime.getHours().toString().padStart(2, '0')}:${respTime.getMinutes().toString().padStart(2, '0')}:${respTime.getSeconds().toString().padStart(2, '0')}`;
@@ -290,14 +357,74 @@ function Reports() {
       setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: respTimeStr, animate: true }]);
       setSystemState("SIS.RESP");
 
-      const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-      audio.onended = () => setSystemState("SIS.AGUARDA");
-      audio.play().catch(e => {
-        console.error("Erro ao tocar áudio", e);
-        setSystemState("SIS.AGUARDA");
-      });
+      const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';
+
+      const playBrowserFallback = (text, isTransition = false) => {
+        console.log('🌐 [JARVIS] Usando voz nativa do navegador...');
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        
+        // Tenta encontrar uma voz masculina/executiva se disponível
+        const voices = window.speechSynthesis.getVoices();
+        const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
+        if (googlePt) utterance.voice = googlePt;
+
+        utterance.onend = () => {
+          if (isTransition) {
+            console.log('🔄 [JARVIS] Transição nativa concluída.');
+            setTimeout(playMainFala, 500);
+          } else {
+            console.log('✅ [JARVIS] Fala nativa concluída.');
+            setSystemState("SIS.AGUARDA");
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const playMainFala = () => {
+        if (voicePreference === 'browser') {
+          playBrowserFallback(spokenText);
+          return;
+        }
+        console.log('🔊 [JARVIS] Tentando falar via API:', spokenText);
+        const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+        audio.onended = () => {
+          console.log('✅ [JARVIS] Fala da API concluída.');
+          setSystemState("SIS.AGUARDA");
+        };
+        audio.play().then(() => {
+          console.log('▶️ [JARVIS] Reproduzindo áudio da API...');
+        }).catch(e => {
+          console.warn("⚠️ [JARVIS] Falha na API (possivelmente créditos), mudando para voz nativa...");
+          playBrowserFallback(spokenText);
+        });
+      };
+
+      if (transicaoText) {
+        if (voicePreference === 'browser') {
+          playBrowserFallback(transicaoText, true);
+        } else {
+          console.log('📡 [JARVIS] Tocando transição:', transicaoText);
+          const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(transicaoText)}`;
+          const transicaoAudio = new Audio(transicaoUrl);
+          currentAudioRef.current = transicaoAudio;
+          transicaoAudio.onended = () => {
+            console.log('🔄 [JARVIS] Transição concluída, iniciando fala principal...');
+            setTimeout(playMainFala, 500);
+          };
+          transicaoAudio.play().catch(e => {
+            console.error("❌ [JARVIS] Erro ao tocar áudio de transição:", e);
+            playMainFala();
+          });
+        }
+      } else {
+        playMainFala();
+      }
     } catch (err) {
       console.error(err);
       setSystemState("SYS.AWAIT");
@@ -381,6 +508,10 @@ function Reports() {
       setIsRecording(false);
       setSystemState("SIS.PROC");
       stopVisualizer();
+
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     } else {
       playBeep('start');
       if (currentAudioRef.current) {
@@ -413,6 +544,7 @@ function Reports() {
             
             if (data.text) {
               sendMessageToJarvis(data.text);
+              setInputText("");
             } else {
               setSystemState("SIS.AGUARDA");
             }
@@ -423,6 +555,32 @@ function Reports() {
           
           stream.getTracks().forEach(track => track.stop());
         };
+
+        // INÍCIO DO RECONHECIMENTO EM TEMPO REAL PARA FEEDBACK VISUAL
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'pt-BR';
+          recognition.continuous = true;
+          recognition.interimResults = true;
+
+          recognition.onresult = (event) => {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                // Ao final, o Whisper substituirá pelo texto mais preciso
+              } else {
+                interimTranscript += event.results[i][0].transcript;
+              }
+            }
+            if (interimTranscript) {
+              setInputText(interimTranscript);
+            }
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        }
 
         mediaRecorder.start();
         setIsRecording(true);
@@ -622,29 +780,16 @@ function Reports() {
             
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 term-scroll">
               <button 
-                onClick={startNewConversation}
-                className="w-full py-2 bg-transparent border border-primary/30 text-primary hover:bg-primary/10 transition-colors font-label-caps tracking-widest text-[10px]"
+                onClick={deleteHistory}
+                className="w-full py-2 bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors font-label-caps tracking-widest text-[10px]"
               >
-                + NOVA SESSÃO
+                EXPURGAR TODO HISTÓRICO
               </button>
               
               <div className="flex flex-col gap-2 mt-4">
-                {chatHistory.length === 0 && <p className="text-primary/40 text-[10px] text-center mt-4">Nenhum registro encontrado.</p>}
-                {chatHistory.map(session => (
-                  <div key={session.id} className="group p-3 border border-primary/10 bg-primary/5 hover:border-primary/30 cursor-pointer transition-colors relative">
-                    <button 
-                      onClick={(e) => deleteSession(e, session.id)}
-                      className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-transparent border border-transparent hover:bg-red-500/10 hover:border-red-500/40 text-primary/40 hover:text-red-400 hover:shadow-[0_0_8px_rgba(248,113,113,0.3)] opacity-0 group-hover:opacity-100 transition-all z-10"
-                      title="Expurgar Registro"
-                    >
-                      <span className="material-icons-outlined text-[13px]">close</span>
-                    </button>
-                    <p className="text-primary/60 text-[9px] mb-1">{session.date}</p>
-                    <p className="text-primary/80 text-[11px] truncate pr-5">
-                      {session.messages[1]?.content || "Sessão Vazia"}
-                    </p>
-                  </div>
-                ))}
+                <p className="text-primary/40 text-[9px] text-center px-4">
+                  O Jarvis agora possui Memória Permanente. Todas as suas conversas estratégicas estão gravadas no núcleo central para consulta futura.
+                </p>
               </div>
             </div>
           </div>
@@ -652,7 +797,7 @@ function Reports() {
 
         {/* Top HUD Section */}
         {!isChatExpanded && (
-          <div className="relative flex-1 flex flex-col items-center justify-center min-h-[35%] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
+          <div className="relative flex-none flex flex-col items-center justify-center min-h-[380px] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
           
           {/* Data Greebles Left */}
           <div className="absolute top-6 left-6 text-primary/40 text-[10px] leading-tight tracking-widest hidden sm:block">
@@ -669,14 +814,14 @@ function Reports() {
           </div>
 
           {/* Center Visualizer HUD */}
-          <div className="relative flex items-center justify-center w-80 h-48">
+          <div className="relative flex items-center justify-center w-80 h-80 mt-4 mb-8">
             
             {/* Background Atmosphere (Aura) */}
             <div className="absolute w-64 h-64 bg-primary/5 rounded-full blur-[60px] animate-pulse"></div>
 
             {/* Concentric Circles */}
-            <div className="absolute w-32 h-32 border border-primary/20 rounded-full animate-pulse"></div>
-            <div className="absolute w-40 h-40 border border-primary/10 rounded-full border-dashed animate-[spin_20s_linear_infinite]"></div>
+            <div className="absolute w-40 h-40 border border-primary/20 rounded-full animate-pulse"></div>
+            <div className="absolute w-56 h-56 border border-primary/10 rounded-full border-dashed animate-[spin_20s_linear_infinite]"></div>
 
             {/* Active Visualizer or Status Text */}
             <div className="relative z-10 flex items-center justify-center">
@@ -713,16 +858,28 @@ function Reports() {
                   {renderSpectrumBars()}
                 </div>
               )}
-              
-              {/* Labels de Estado com Estilo de Terminal */}
-              {systemState !== "SYS.AWAIT" && (
-                <div className="absolute -bottom-12 text-primary/80 font-label-caps tracking-[0.2em] text-[10px] animate-pulse flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-ping"></div>
-                  {systemState === "USER.RECV" ? "CAPTURANDO_AUDIO.EXE" : "SINCRONIZANDO_NUCLEO.DLL"}
-                </div>
-              )}
             </div>
           </div>
+
+          {/* Labels de Estado HUD Premium - AGORA NO FLUXO NORMAL (FLEX-COL) */}
+          <div className="w-full flex items-center justify-center z-20 mb-6 px-4">
+            <div className="flex items-center gap-3 px-6 py-2 bg-black/60 backdrop-blur-md border border-primary/40 rounded-full shadow-[0_0_20px_rgba(76,214,251,0.2)] animate-[pulse_2s_infinite]">
+              <div className="relative flex items-center justify-center shrink-0">
+                <div className={`w-3 h-3 rounded-full ${systemState === 'SIS.AGUARDA' ? 'bg-green-400 shadow-[0_0_12px_#4ade80]' : 'bg-primary shadow-[0_0_12px_#4cd6fb]'} animate-pulse`}></div>
+                <div className={`absolute w-5 h-5 rounded-full border border-current ${systemState === 'SIS.AGUARDA' ? 'text-green-400/50' : 'text-primary/50'} animate-ping`}></div>
+              </div>
+              <span className="text-primary font-label-caps tracking-[0.2em] text-[10px] sm:text-[12px] font-bold text-center" style={{ textShadow: '0 0 10px rgba(76, 214, 251, 0.5)' }}>
+                {
+                  systemState === "USER.RECV" ? "CAPTURANDO ÁUDIO: ESCUTANDO SENHOR..." :
+                  systemState === "SIS.PROC" ? "PROCESSANDO DADOS ESTRATÉGICOS..." :
+                  systemState === "SIS.RESP" ? "JARVIS EMITINDO DIAGNÓSTICO..." :
+                  systemState === "SIS.AGUARDA" ? "ESTOU PRONTO PARA OUVI-LO, SENHOR!" :
+                  "SINCRONIZANDO NÚCLEO CENTRAL.DLL"
+                }
+              </span>
+            </div>
+          </div>
+          
         </div>
         )}
 

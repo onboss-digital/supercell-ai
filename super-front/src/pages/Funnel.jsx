@@ -85,7 +85,7 @@ function Funnel() {
           <select className="filter-select" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ border: 'none', background: 'var(--color-surface-container-low)', padding: '0.6rem 1rem', borderRadius: '0.5rem', fontWeight: '600', outline: 'none', cursor: 'pointer' }}>
             <option value="hoje">Hoje</option>
             <option value="7dias">Últimos 7 dias</option>
-            <option value="mes">Este Mês</option>
+            <option value="mes">Últimos 30 dias</option>
             <option value="maximo">Máximo</option>
             <option value="personalizado">Personalizado</option>
           </select>

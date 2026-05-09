@@ -112,6 +112,7 @@ export const menuItems = [
   { id: 'ads', label: 'Campanhas', icon: 'ads_click', path: '/ads' },
   { id: 'funnel', label: 'Funil de Vendas', icon: 'filter_alt', path: '/funnel' },
   { id: 'crm', label: 'CRM de Leads', icon: 'group', path: '/crm' },
+  { id: 'pdv', label: 'PDV (Vendas)', icon: 'point_of_sale', path: '/pdv' },
   { id: 'reports', label: 'Relatórios da IA', icon: 'psychology', path: '/reports' },
   { id: 'settings', label: 'Configurações', icon: 'settings', path: '/settings' }
 ];

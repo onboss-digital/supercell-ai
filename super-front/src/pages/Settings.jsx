@@ -50,11 +50,77 @@ function Settings() {
 
   const [mercadoStatus, setMercadoStatus] = useState({ active: false, lastSync: null });
 
+  // WhatsApp Evolution API States
+  const [waStatus, setWaStatus] = useState('disconnected');
+  const [waQR, setWaQR] = useState('');
+  const [waLoading, setWaLoading] = useState(false);
+  const [showWAModal, setShowWAModal] = useState(false);
+
+  const checkWAStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/whatsapp/status`);
+      const data = await res.json();
+      if (data.instance?.state === 'open') {
+        setWaStatus('connected');
+      } else {
+        setWaStatus('disconnected');
+      }
+    } catch (err) {
+      console.error('Erro ao checar status WA', err);
+    }
+  };
+
+  const getWAQRCode = async (retryCount = 0) => {
+    if (retryCount === 0) {
+      setWaLoading(true);
+      setWaQR('');
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/whatsapp/qrcode`);
+      const data = await res.json();
+      
+      if (data.qrcode) {
+        setWaQR(data.qrcode);
+        setWaStatus('scanning');
+        setWaLoading(false);
+      } else if (data.status === 'connected') {
+        setWaStatus('connected');
+        setWaLoading(false);
+        showNotification('success', 'WhatsApp Conectado', 'Sua instância já está ativa e operacional via Z-API.');
+      } else if (data.status === 'pending') {
+        // Polling automático
+        if (retryCount < 10) {
+          setTimeout(() => getWAQRCode(retryCount + 1), 5000);
+        } else {
+          setWaLoading(false);
+          showNotification('info', 'Aguardando Z-API', 'O servidor da Z-API está demorando para responder. Tente novamente em alguns instantes.');
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao gerar QR Code', err);
+      setWaLoading(false);
+      showNotification('error', 'Erro de Conexão', 'Não foi possível contatar o servidor da Z-API.');
+    }
+  };
+
+  const logoutWA = async () => {
+    if (!window.confirm('Deseja realmente desconectar o WhatsApp?')) return;
+    try {
+      await fetch(`${API_URL}/api/whatsapp/logout`, { method: 'POST' });
+      setWaStatus('disconnected');
+      setWaQR('');
+    } catch (err) {
+      console.error('Erro ao desconectar WA', err);
+    }
+  };
+
   // Busca dados do banco de dados quando entra na aba Integrações
   useEffect(() => {
     if (activeTab === 'Integrações') {
       fetchBMs();
       fetchMercadoStatus();
+      checkWAStatus();
     }
   }, [activeTab]);
 
@@ -130,6 +196,7 @@ function Settings() {
 
   const [aiSystemPrompt, setAiSystemPrompt] = useState('');
   const [aiModel, setAiModel] = useState('gpt-4o');
+  const [voiceEngine, setVoiceEngine] = useState(localStorage.getItem('jarvisVoice') || 'elevenlabs');
   const [availableModels, setAvailableModels] = useState(['gpt-4o', 'gpt-4o-mini']);
   const [isAiOperational, setIsAiOperational] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
@@ -157,6 +224,34 @@ function Settings() {
   const [security, setSecurity] = useState({ twoFactorEnabled: false, lastPasswordChange: '' });
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Sistema de Metas Dinâmicas
+  const [customGoals, setCustomGoals] = useState([]);
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalValue, setNewGoalValue] = useState('');
+  const [newGoalUnit, setNewGoalUnit] = useState('');
+  const [newGoalPeriod, setNewGoalPeriod] = useState('');
+  const [loadingGoals, setLoadingGoals] = useState(false);
+
+  // Base de Conhecimento
+  const [knowledgeFiles, setKnowledgeFiles] = useState([]);
+  const [loadingKnowledge, setLoadingKnowledge] = useState(false);
+  const [uploadingKnowledge, setUploadingKnowledge] = useState(false);
+
+  // Sistema de Notificações Inteligentes
+  const [notification, setNotification] = useState({ show: false, type: 'success', title: '', message: '' });
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+
+  const showNotification = (type, title, message) => {
+    setNotification({ show: true, type, title, message });
+    if (type === 'success') {
+      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 5000);
+    }
+  };
+
+  const askConfirmation = (title, message, onConfirm) => {
+    setConfirmModal({ show: true, title, message, onConfirm });
+  };
 
   const tabs = ['Geral', 'Integrações', 'Jarvis', 'Equipe', 'Faturamento', 'Segurança'];
 
@@ -302,8 +397,12 @@ function Settings() {
       setAiSystemPrompt(data.systemPrompt);
       setAiModel(data.model || 'gpt-4o');
       setIsAiOperational(data.isConfigured);
+      
+      // Buscar metas dinâmicas
+      fetchCustomGoals();
+      fetchKnowledgeFiles();
 
-      // Buscar metas também (agora na aba Jarvis)
+      // Buscar metas clássicas (mantido para fallback)
       const resGoals = await fetch(`${API_URL}/api/settings/goals`);
       const dataGoals = await resGoals.json();
       setDailySalesGoal(dataGoals.dailySalesGoal || 0);
@@ -325,13 +424,127 @@ function Settings() {
     }
   };
 
+  const fetchCustomGoals = async () => {
+    setLoadingGoals(true);
+    try {
+      const res = await fetch(`${API_URL}/api/custom-goals`);
+      const data = await res.json();
+      setCustomGoals(data);
+    } catch (err) {
+      console.error('Erro ao buscar metas dinâmicas:', err);
+    } finally {
+      setLoadingGoals(false);
+    }
+  };
+
+  const handleAddCustomGoal = async () => {
+    if (!newGoalName || !newGoalValue) return showNotification('error', 'Campos Vazios', 'Nome e Valor são obrigatórios para criar uma meta.');
+    try {
+      const res = await fetch(`${API_URL}/api/custom-goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newGoalName,
+          value: newGoalValue,
+          unit: newGoalUnit,
+          period: newGoalPeriod
+        })
+      });
+      if (res.ok) {
+        setNewGoalName('');
+        setNewGoalValue('');
+        setNewGoalUnit('');
+        setNewGoalPeriod('');
+        fetchCustomGoals();
+      }
+    } catch (err) {
+      console.error('Erro ao adicionar meta:', err);
+    }
+  };
+
+  const handleDeleteCustomGoal = async (id) => {
+    askConfirmation(
+      'Excluir Meta?', 
+      'Esta meta será removida permanentemente e o Jarvis deixará de considerá-la em suas análises estratégicas.',
+      async () => {
+        try {
+          await fetch(`${API_URL}/api/custom-goals/${id}`, { method: 'DELETE' });
+          fetchCustomGoals();
+          showNotification('success', 'Meta Excluída', 'A métrica foi removida com sucesso do sistema.');
+        } catch (err) {
+          console.error('Erro ao deletar meta:', err);
+        }
+      }
+    );
+  };
+
+  const fetchKnowledgeFiles = async () => {
+    setLoadingKnowledge(true);
+    try {
+      const res = await fetch(`${API_URL}/api/knowledge`);
+      const data = await res.json();
+      setKnowledgeFiles(data);
+    } catch (err) {
+      console.error('Erro ao buscar base de conhecimento:', err);
+    } finally {
+      setLoadingKnowledge(false);
+    }
+  };
+
+  const handleUploadKnowledge = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingKnowledge(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${API_URL}/api/knowledge/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        showNotification('success', 'Documento Memorizado', 'O Jarvis leu o arquivo e já o incluiu na base de conhecimento.');
+        fetchKnowledgeFiles();
+      } else {
+        const err = await res.json();
+        showNotification('error', 'Erro de Leitura', err.error || "Não conseguimos processar este arquivo.");
+      }
+    } catch (err) {
+      console.error('Erro no upload:', err);
+    } finally {
+      setUploadingKnowledge(false);
+    }
+  };
+
+  const handleDeleteKnowledge = async (id) => {
+    askConfirmation(
+      'Apagar Memória?', 
+      'O Jarvis esquecerá completamente o conteúdo deste documento. Esta ação não pode ser desfeita.',
+      async () => {
+        try {
+          await fetch(`${API_URL}/api/knowledge/${id}`, { method: 'DELETE' });
+          fetchKnowledgeFiles();
+          showNotification('success', 'Memória Apagada', 'O documento foi removido da base de conhecimento.');
+        } catch (err) {
+          console.error('Erro ao deletar arquivo:', err);
+        }
+      }
+    );
+  };
+
   const handleSaveAiConfig = async () => {
     setSavingAi(true);
     try {
+      localStorage.setItem('jarvisVoice', voiceEngine);
       await fetch(`${API_URL}/api/ai-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt: aiSystemPrompt, model: aiModel })
+        body: JSON.stringify({ 
+          systemPrompt: aiSystemPrompt, 
+          model: aiModel
+        })
       });
 
       // Salvar metas (agora aqui no Jarvis)
@@ -341,11 +554,11 @@ function Settings() {
         body: JSON.stringify({ dailySalesGoal: Number(dailySalesGoal), dailyLeadsGoal: Number(dailyLeadsGoal) })
       });
       
-      alert('Configurações do Jarvis e Metas salvas com sucesso!');
+      showNotification('success', 'Configurações Salvas', 'O DNA do Jarvis e suas metas foram atualizados com sucesso.');
       fetchAiConfig(); // Atualiza o status
     } catch (err) {
       console.error('Erro ao salvar config de IA:', err);
-      alert('Erro ao salvar configurações.');
+      showNotification('error', 'Falha no Salvamento', 'Não foi possível salvar as configurações do Jarvis. Verifique sua conexão.');
     }
     setSavingAi(false);
   };
@@ -649,8 +862,66 @@ function Settings() {
               Outros Conectores de API
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* WhatsApp Evolution Card */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '1.5rem', 
+                background: 'var(--color-surface-container-lowest)', 
+                borderRadius: '1rem',
+                border: '1px solid var(--color-surface-container-low)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e' }}>
+                    <span className="material-icons-outlined">chat</span>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '800', color: 'var(--color-on-surface)' }}>WhatsApp (Z-API)</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', marginTop: '0.2rem' }}>
+                      {waStatus === 'connected' ? 'Conectado e operacional' : 'Integração de Mensagens Inbound & Outbound'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '900', 
+                    padding: '0.4rem 0.8rem', 
+                    borderRadius: '2rem',
+                    background: waStatus === 'connected' ? '#10B98115' : '#f59e0b15',
+                    color: waStatus === 'connected' ? '#10B981' : '#f59e0b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}>
+                    {waStatus === 'connected' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B981' }}></span>}
+                    {waStatus === 'connected' ? 'ONLINE' : 'DESCONECTADO'}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      setShowWAModal(true);
+                      if (waStatus !== 'connected') getWAQRCode();
+                    }}
+                    style={{
+                      background: '#25D366',
+                      color: 'white',
+                      border: 'none',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      padding: '0.6rem 1rem',
+                      borderRadius: '0.5rem',
+                      transition: 'opacity 0.2s',
+                    }}
+                    onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
+                    onMouseOut={e => e.currentTarget.style.opacity = '1'}
+                  >
+                    {waStatus === 'connected' ? 'Gerenciar' : 'Conectar'}
+                  </button>
+                </div>
+              </div>
+
               {[
-                { label: "WhatsApp Business API", status: "Aguardando", icon: "chat" },
                 { label: "Google Ads API", status: "Desconectado", icon: "ads_click" }
               ].map((item, i) => (
                 <div key={i} style={{ 
@@ -813,7 +1084,7 @@ function Settings() {
                 <textarea 
                   value={aiSystemPrompt}
                   onChange={(e) => setAiSystemPrompt(e.target.value)}
-                  placeholder="Ex: Você é o J.A.R.V.I.S., trate-me como Senhor Gustavo. Sua meta principal é lucrar com iPhones..."
+                  placeholder="Ex: Você é o J.A.R.V.I.S., mentor de alta performance. Trate-me como Senhor Senhor Gustavo. Sua meta principal é o lucro real..."
                   style={{ 
                     width: '100%', minHeight: '150px', padding: '1.5rem', borderRadius: '1rem', 
                     border: '1.5px solid #0EA5E9', background: '#f8fafc', outline: 'none', 
@@ -839,8 +1110,9 @@ REGRAS RÍGIDAS PARA A TAG [FALA] (Áudio):
 2. PROIBIDO O USO DE EMOJIS: NUNCA use emojis em nenhuma parte da resposta.
 3. PROIBIDO USAR SIGLAS OU PARÊNTESES: Nunca diga "CPA" ou "CTR". Diga "o custo por cada contato".
 4. PROIBIDO LER SÍMBOLOS MATEMÁTICOS: Leia como se fala: "reais", "por cento".
-5. COMPORTAMENTO ALTRUÍSTA: Responda apenas o valor principal na fala e diga que os detalhes estão na tela. Não dite listas de dados.
-6. SEU NOME: Nunca escreva "J.A.R.V.I.S." com pontos. Escreva "Jarvis" para a voz sair natural.
+5. AÇÃO PROATIVA: Você DEVE dar sugestões de otimização na fala (ex: "Sugiro pausar campanha X").
+6. CONTINUE FALANDO: Não pare a fala porque a tabela está na tela. Prossiga com sua análise estratégica.
+7. SEU NOME: Nunca escreva "J.A.R.V.I.S." com pontos. Escreva "Jarvis".
 
 REGRAS PARA A TAG [TELA] (Visual):
 Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE EMOJIS.`}
@@ -853,35 +1125,129 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                 />
 
                 <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Metas Operacionais</h3>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Fábrica de Metas Dinâmicas</h3>
                   <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                    Defina os objetivos diários que o Jarvis utilizará para analisar sua performance e dar conselhos estratégicos.
+                    Crie, edite ou remova metas personalizadas. O Jarvis se adapta automaticamente a qualquer métrica que você adicionar aqui.
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>META DIÁRIA DE LEADS</label>
-                      <input 
-                        type="number"
-                        value={dailyLeadsGoal}
-                        onChange={e => setDailyLeadsGoal(e.target.value)}
-                        style={{ padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', color: 'var(--color-on-surface)', outline: 'none' }}
-                      />
+
+                  <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>NOME DA META</label>
+                        <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="Ex: Lucro em 7 dias" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>VALOR ALVO</label>
+                        <input value={newGoalValue} onChange={e => setNewGoalValue(e.target.value)} placeholder="Ex: 5000" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>UNIDADE</label>
+                        <input value={newGoalUnit} onChange={e => setNewGoalUnit(e.target.value)} placeholder="Ex: R$, %, leads" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>PERÍODO</label>
+                        <input value={newGoalPeriod} onChange={e => setNewGoalPeriod(e.target.value)} placeholder="Ex: 7 dias, Diário" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                      </div>
+                      <button onClick={handleAddCustomGoal} style={{ background: '#0EA5E9', color: 'white', border: 'none', padding: '0.85rem', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <span className="material-icons-outlined">add</span>
+                      </button>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>META DIÁRIA DE VENDAS</label>
-                      <input 
-                        type="number"
-                        value={dailySalesGoal}
-                        onChange={e => setDailySalesGoal(e.target.value)}
-                        style={{ padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', color: 'var(--color-on-surface)', outline: 'none' }}
-                      />
-                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {loadingGoals ? (
+                      <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Carregando metas...</p>
+                    ) : customGoals.length === 0 ? (
+                      <div style={{ padding: '2rem', textAlign: 'center', border: '2px dashed #e2e8f0', borderRadius: '1rem', color: '#94a3b8' }}>
+                        Nenhuma meta personalizada criada. Comece adicionando uma acima!
+                      </div>
+                    ) : (
+                      customGoals.map(goal => (
+                        <div key={goal.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '1rem 1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+                            <div style={{ width: '40px', height: '40px', background: '#E0F2FE', color: '#0369A1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>ads_click</span>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>{goal.name}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Período: {goal.period || 'Geral'}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '3rem', alignItems: 'center' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Objetivo</div>
+                              <div style={{ fontWeight: '900', color: '#0EA5E9', fontSize: '1.1rem' }}>{goal.unit === 'R$' ? `R$ ${goal.value}` : `${goal.value}${goal.unit || ''}`}</div>
+                            </div>
+                            <button onClick={() => handleDeleteCustomGoal(goal.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0.5rem' }}>
+                              <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>delete_outline</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Seção de Base de Conhecimento */}
+                <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Memória de Longo Prazo (Base de Conhecimento)</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                    Alimente o Jarvis com manuais, scripts de vendas ou tabelas de preços. Ele consultará esses documentos para te dar respostas mais precisas.
+                  </p>
+
+                  <div style={{ marginBottom: '2rem' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      padding: '2rem', 
+                      border: '2px dashed #cbd5e1', 
+                      borderRadius: '1rem', 
+                      cursor: 'pointer',
+                      background: uploadingKnowledge ? '#f8fafc' : 'white',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
+                        {uploadingKnowledge ? 'sync' : 'cloud_upload'}
+                      </span>
+                      <span style={{ fontWeight: '700', color: '#475569' }}>
+                        {uploadingKnowledge ? 'Processando arquivo...' : 'Clique para subir PDF ou TXT'}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>O Jarvis lerá o conteúdo e guardará na memória</span>
+                      <input type="file" accept=".pdf,.txt" onChange={handleUploadKnowledge} style={{ display: 'none' }} disabled={uploadingKnowledge} />
+                    </label>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+                    {loadingKnowledge ? (
+                      <p>Carregando memória...</p>
+                    ) : knowledgeFiles.length === 0 ? (
+                      <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+                        Nenhum documento na memória.
+                      </div>
+                    ) : (
+                      knowledgeFiles.map(file => (
+                        <div key={file.id} style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
+                          <div style={{ width: '40px', height: '40px', background: '#F1F5F9', color: '#475569', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span className="material-icons-outlined">{file.fileType.includes('pdf') ? 'description' : 'article'}</span>
+                          </div>
+                          <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.fileName}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Adicionado em {new Date(file.createdAt).toLocaleDateString()}</div>
+                          </div>
+                          <button onClick={() => handleDeleteKnowledge(file.id)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.25rem' }}>
+                            <span className="material-icons-outlined" style={{ fontSize: '1.1rem' }}>close</span>
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Seção do Modelo */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              {/* Seção do Modelo e Voz */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
                 <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
@@ -900,6 +1266,27 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                     {availableModels.map(model => (
                       <option key={model} value={model}>{model.toUpperCase()}</option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Motor de Voz */}
+                <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                      <span className="material-icons-outlined">record_voice_over</span>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>Motor de Voz</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Sua preferência</div>
+                    </div>
+                  </div>
+                  <select 
+                    value={voiceEngine}
+                    onChange={(e) => setVoiceEngine(e.target.value)}
+                    style={{ border: 'none', background: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: '700', outline: 'none', cursor: 'pointer' }}
+                  >
+                    <option value="elevenlabs">ElevenLabs (Premium)</option>
+                    <option value="browser">Navegador (Grátis)</option>
                   </select>
                 </div>
 
@@ -1184,7 +1571,7 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', fontWeight: '800', marginBottom: '0.5rem' }}>URL RECEPTORA DO SUPERCELL AI</label>
                 <div style={{ display: 'flex' }}>
                   <input readOnly value={`${API_URL}/api/webhooks/mercadophone`} type="text" style={{ width: '100%', boxSizing: 'border-box', padding: '1rem', borderRadius: '0.75rem 0 0 0.75rem', border: '1px solid #ddd', borderRight: 'none', outline: 'none', fontWeight: '600', color: '#8B5CF6', background: '#F5F3FF' }} />
-                  <button onClick={() => { navigator.clipboard.writeText(`${API_URL}/api/webhooks/mercadophone`); alert("Copiado!"); }} style={{ padding: '0 1rem', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '0 0.75rem 0.75rem 0', cursor: 'pointer' }}>
+                  <button onClick={() => { navigator.clipboard.writeText(`${API_URL}/api/webhooks/mercadophone`); showNotification('success', 'Copiado!', 'A URL do Webhook foi copiada para sua área de transferência.'); }} style={{ padding: '0 1rem', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '0 0.75rem 0.75rem 0', cursor: 'pointer' }}>
                     <span className="material-icons-outlined">content_copy</span>
                   </button>
                 </div>
@@ -1204,7 +1591,144 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
           </div>
         </div>
       )}
+      
+      {/* Modal WhatsApp */}
+      {showWAModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+          <div style={{ background: 'white', width: '100%', maxWidth: '450px', borderRadius: '2rem', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+            <div style={{ padding: '2rem', background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span className="material-icons-outlined" style={{ fontSize: '2rem' }}>whatsapp</span>
+                <div>
+                  <h3 style={{ fontWeight: '900', fontSize: '1.2rem' }}>WHATSAPP CRM</h3>
+                  <p style={{ fontSize: '0.7rem', fontWeight: '700', opacity: 0.8, textTransform: 'uppercase' }}>Z-API Cloud v3.0</p>
+                </div>
+              </div>
+              <button onClick={() => setShowWAModal(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span className="material-icons-outlined">close</span>
+              </button>
+            </div>
 
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              {waStatus === 'connected' ? (
+                <div>
+                  <div style={{ width: '80px', height: '80px', background: '#dcfce7', color: '#16a34a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                    <span className="material-icons-outlined" style={{ fontSize: '3rem' }}>check_circle</span>
+                  </div>
+                  <h4 style={{ color: '#1e293b', fontSize: '1.2rem', fontWeight: '900' }}>Conectado com Sucesso!</h4>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>O Supercell AI agora está recebendo e enviando mensagens deste número em tempo real.</p>
+                  
+                  <button onClick={logoutWA} style={{ marginTop: '2rem', width: '100%', padding: '1rem', borderRadius: '1rem', border: '1px solid #fee2e2', background: '#fef2f2', color: '#ef4444', fontWeight: '800', cursor: 'pointer' }}>
+                    DESCONECTAR NÚMERO
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ color: '#1e293b', fontSize: '0.9rem', fontWeight: '700', marginBottom: '1.5rem' }}>
+                    Escaneie o QR Code abaixo para conectar o WhatsApp da empresa ao CRM.
+                  </p>
+
+                  <div style={{ width: '250px', height: '250px', background: '#f8fafc', borderRadius: '1.5rem', margin: '0 auto', border: '2px dashed #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                    {waQR ? (
+                      <img src={waQR} alt="WhatsApp QR Code" style={{ width: '100%', height: '100%', padding: '1rem' }} />
+                    ) : (
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #25D366', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800' }}>{waStatus === 'connected' ? 'CONECTADO!' : 'SINCRONIZANDO...'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {!waQR && !waLoading && (
+                    <button onClick={getWAQRCode} style={{ marginTop: '1.5rem', width: '100%', padding: '1rem', borderRadius: '1rem', border: 'none', background: '#0ea5e9', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(14, 165, 233, 0.3)' }}>
+                      GERAR NOVO QR CODE
+                    </button>
+                  )}
+
+                  {waQR && (
+                    <p style={{ marginTop: '1rem', fontSize: '0.7rem', color: '#64748b', fontWeight: '600' }}>
+                      Aguardando leitura do QR Code...
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '1.5rem', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: waStatus === 'connected' ? '#22c55e' : '#f59e0b' }}></div>
+              <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
+                STATUS: {waStatus === 'connected' ? 'ONLINE' : 'AGUARDANDO CONEXÃO'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE STATUS INTELIGENTE (PREMIUM) */}
+      {notification.show && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div onClick={() => setNotification({ ...notification, show: false })} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(2, 6, 23, 0.6)', backdropFilter: 'blur(12px)' }} />
+          <div style={{
+            position: 'relative', background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(20px)',
+            width: '90%', maxWidth: '420px', padding: '3rem 2rem', borderRadius: '2.5rem', textAlign: 'center',
+            boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.3)',
+            animation: 'modalSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          }}>
+            <div style={{ width: '80px', height: '80px', borderRadius: '30%', background: notification.type === 'success' ? '#10B981' : '#EF4444', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem auto' }}>
+              <span className="material-icons-outlined" style={{ fontSize: '3.5rem' }}>{notification.type === 'success' ? 'verified' : 'report_problem'}</span>
+            </div>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0f172a', marginBottom: '1rem' }}>{notification.title}</h2>
+            <p style={{ color: '#475569', fontSize: '1.1rem', marginBottom: '2.5rem' }}>{notification.message}</p>
+            <button onClick={() => setNotification({ ...notification, show: false })} style={{ width: '100%', padding: '1.25rem', borderRadius: '1.25rem', background: '#0f172a', color: 'white', border: 'none', fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer' }}>Entendido</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO (PREMIUM) */}
+      {confirmModal.show && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(2, 6, 23, 0.7)', backdropFilter: 'blur(10px)' }} />
+          <div style={{
+            position: 'relative', background: 'white', width: '90%', maxWidth: '400px',
+            padding: '2.5rem', borderRadius: '2rem', textAlign: 'center',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            animation: 'modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '20px', background: '#FFF7ED', color: '#EA580C', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+              <span className="material-icons-outlined" style={{ fontSize: '2.5rem' }}>help_outline</span>
+            </div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0f172a', marginBottom: '0.8rem' }}>{confirmModal.title}</h2>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: '1.5', marginBottom: '2rem' }}>{confirmModal.message}</p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={() => setConfirmModal({ ...confirmModal, show: false })} style={{ flex: 1, padding: '1rem', borderRadius: '1rem', background: '#f1f5f9', color: '#475569', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={() => { confirmModal.onConfirm(); setConfirmModal({ ...confirmModal, show: false }); }} style={{ flex: 1, padding: '1rem', borderRadius: '1rem', background: '#EF4444', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Sim, Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes modalSlideIn {
+          0% { opacity: 0; transform: translateY(40px) scale(0.9); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </main>
   );
 }
