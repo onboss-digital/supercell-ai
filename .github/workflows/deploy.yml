@@ -19,11 +19,8 @@ jobs:
             cd ~/supercell-ai || git clone https://github.com/${{ github.repository }}.git ~/supercell-ai
             cd ~/supercell-ai
             git pull origin main
-            
-            # Atualiza o Frontend usando Docker (passando a URL da API para o build)
-            docker run --rm -v ~/supercell-ai/super-front:/app -w /app -e VITE_API_URL=https://supercellia.com node:20-slim sh -c "npm install && npm run build"
-            
+
             # Reconstroi e reinicia todos os containers (V2 - sem hifen)
-            docker compose up -d --build
+            VITE_API_URL=https://supercellia.com docker compose up -d --build
             docker image prune -f
 

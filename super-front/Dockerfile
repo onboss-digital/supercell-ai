@@ -4,6 +4,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
+# Recebe a URL da API como build argument (passado pelo docker-compose)
+ARG VITE_API_URL=https://supercellia.com
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # Estágio 2: Serve

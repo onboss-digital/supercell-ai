@@ -33,17 +33,17 @@ services:
     ports:
       - "3005:3005"
 
-  # Frontend servido via Nginx (Build em tempo de execução ou via cópia)
-  # Nota: Em produção, o Nginx da VPS servirá os estáticos, 
-  # mas este container pode ser usado para testes ou preview.
+  # Frontend servido via Nginx
   frontend:
     build:
       context: ./super-front
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://supercellia.com}
     container_name: supercell_front
     restart: always
     ports:
-      - "8080:80"
+      - "8081:80"
     networks:
       - supercell_network
 
