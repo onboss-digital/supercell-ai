@@ -75,7 +75,7 @@ const PORT = process.env.PORT || 3005;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: false
 });
 
 const prisma = new PrismaClient();
