@@ -73,7 +73,7 @@ function AdsAnalysis() {
             >
               <option value="hoje">Hoje</option>
               <option value="7dias">Últimos 7 dias</option>
-              <option value="mes">Este Mês</option>
+              <option value="mes">Últimos 30 dias</option>
               <option value="maximo">Máximo</option>
               <option value="personalizado">Personalizado</option>
             </select>

@@ -9,6 +9,7 @@ import CRM from './pages/CRM';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import PDV from './pages/PDV';
 import OnboardingGuide from './components/OnboardingGuide';
 import { supabase } from './lib/supabase';
 import './styles/App.css';
@@ -62,6 +63,7 @@ function App() {
           <Route path="/ads" element={<AdsAnalysis />} />
           <Route path="/funnel" element={<Funnel />} />
           <Route path="/crm" element={<CRM />} />
+          <Route path="/pdv" element={<PDV />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/:tabId" element={<Settings />} />

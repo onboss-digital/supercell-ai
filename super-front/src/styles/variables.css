@@ -22,6 +22,11 @@
   --color-outline: rgba(0, 245, 255, 0.15);
   --color-outline-variant: rgba(0, 245, 255, 0.05);
 
+  --color-surface-container-low: #00121a;
+  --color-surface-container-lowest: #00080a;
+  --color-surface-container-high: #001a24;
+  --color-surface-container-highest: #002533;
+
   /* Typography - Precise Technical Look */
   --font-family: 'Fira Sans', sans-serif;
   --font-mono: 'Fira Code', monospace;

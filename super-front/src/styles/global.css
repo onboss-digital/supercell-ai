@@ -102,3 +102,13 @@ ul, li {
   90% { opacity: 1; }
   100% { top: 110%; opacity: 0; }
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}

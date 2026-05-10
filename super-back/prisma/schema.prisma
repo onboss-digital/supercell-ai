@@ -31,18 +31,35 @@ model AdAccount {
 }
 
 model Lead {
-  id           String    @id @default(uuid())
-  name         String
-  phone        String
-  status       String    @default("NEW")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  adAccountId  String
-  adName       String?
-  campaignName String?
-  adsetName    String?
-  platform     String    @default("whatsapp")
-  adAccount    AdAccount @relation(fields: [adAccountId], references: [id])
+  id                String    @id @default(uuid())
+  name              String
+  phone             String    @unique
+  instagramHandle   String?   
+  status            String    @default("NEW")
+  temperature       String    @default("Quente") // Quente, Morno, Frio
+  lastInteractionAt DateTime  @default(now())
+  productName       String?
+  profilePic        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  adAccountId       String?
+  adName            String?
+  campaignName      String?
+  adsetName         String?
+  platform          String    @default("whatsapp")
+  tags              String[]  @default([])
+  adAccount         AdAccount? @relation(fields: [adAccountId], references: [id])
+  messages          Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  mid       String?  @unique
+  content   String   @db.Text
+  sender    String   // "lead" ou "system" ou "agent"
+  createdAt DateTime @default(now())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id])
 }
 
 model Sale {
@@ -55,10 +72,16 @@ model Sale {
 }
 
 model AiConfig {
-  id           String   @id @default("default")
-  systemPrompt String
-  model        String   @default("gpt-4o")
-  updatedAt    DateTime @updatedAt
+  id                   String   @id @default("default")
+  systemPrompt         String
+  model                String   @default("gpt-4o")
+  updatedAt            DateTime @updatedAt
+  voiceId              String?
+  markupPerUnit        Float?   @default(0)
+  targetConversionRate Float?   @default(0)
+  cpaThreshold         Float?   @default(0)
+  ctrThreshold         Float?   @default(0)
+  weeklyMessageGoal    Int?     @default(0)
 }
 
 model DailyInsight {
@@ -75,6 +98,78 @@ model CustomTemplate {
   metricIds Json
   funnelIds Json
   icon      String   @default("auto_awesome")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CompanyProfile {
+  id        String    @id
+  name      String?   @default("Supercell AI Store")
+  timezone  String?   @default("UTC-3")
+  currency  String?   @default("BRL")
+  updatedAt DateTime? @default(now()) @db.Timestamp(6)
+  logoUrl   String?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Invoice {
+  id        Int       @id @default(autoincrement())
+  date      String
+  value     String
+  status    String?   @default("Pago")
+  createdAt DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OnboardingState {
+  id           String    @id
+  is_dismissed Boolean?  @default(false)
+  createdAt    DateTime? @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SalesGoal {
+  id             String    @id
+  dailySalesGoal Int?      @default(0)
+  dailyLeadsGoal Int?      @default(0)
+  updatedAt      DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SecuritySettings {
+  id                 String    @id
+  twoFactorEnabled   Boolean?  @default(false)
+  lastPasswordChange DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model TeamMember {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  email     String    @unique
+  role      String?   @default("Analista")
+  createdAt DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model CustomGoal {
+  id        String   @id @default(uuid())
+  name      String   // Ex: "Lucro em 7 dias"
+  value     String   // Ex: "5000" ou "100"
+  unit      String?  // Ex: "R$", "%", "mensagens"
+  period    String?  // Ex: "7 dias", "diário"
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model KnowledgeFile {
+  id        String   @id @default(uuid())
+  fileName  String
+  content   String   // Conteúdo extraído do arquivo
+  fileType  String   // pdf, txt, docx, etc.
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
