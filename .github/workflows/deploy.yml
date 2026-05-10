@@ -23,6 +23,7 @@ jobs:
             # Atualiza o Frontend usando Docker (passando a URL da API para o build)
             docker run --rm -v ~/supercell-ai/super-front:/app -w /app -e VITE_API_URL=https://supercellia.com node:20-slim sh -c "npm install && npm run build"
             
-            # Atualiza os Containers (Backend e DB)
-            docker-compose up -d --build
+            # Reconstroi e reinicia todos os containers (V2 - sem hifen)
+            docker compose up -d --build
             docker image prune -f
+
