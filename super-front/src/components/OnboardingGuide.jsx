@@ -16,9 +16,14 @@ function OnboardingGuide() {
       ]);
       const statusData = await statusRes.json();
       const stateData = await stateRes.json();
-      
-      setStatus(statusData);
-      setOnboardingState(stateData);
+
+      // Só usa os dados se a API retornou estrutura válida (sem erro)
+      if (statusData && Array.isArray(statusData.steps)) {
+        setStatus(statusData);
+      }
+      if (stateData && !stateData.error) {
+        setOnboardingState(stateData);
+      }
 
       // Abrir automaticamente se não estiver tudo concluído e não tiver sido ignorado
       const allCompleted = statusData?.steps?.every(s => s.completed) ?? false;
@@ -68,9 +73,10 @@ function OnboardingGuide() {
     }
   };
 
-  if (!status || !onboardingState) return null;
+  // Não renderiza se os dados ainda não chegaram ou se steps não existe
+  if (!status || !status.steps || !onboardingState) return null;
 
-  const allCompleted = status?.steps?.every(s => s.completed) ?? false;
+  const allCompleted = status.steps.every(s => s.completed);
   if (allCompleted && !isOpen) return null;
 
   return (
