@@ -26,8 +26,6 @@ services:
       - db
     env_file:
       - ./super-back/.env
-    environment:
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-supersecret}@db:5432/supercell_ai?schema=public
     networks:
       - supercell_network
     ports:

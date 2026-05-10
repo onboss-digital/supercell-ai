@@ -209,6 +209,18 @@ const initDb = async () => {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "CustomTemplate" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "metricIds" JSONB,
+        "funnelIds" JSONB,
+        "icon" TEXT DEFAULT 'auto_awesome',
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('✅ Banco de Dados Preparado.');
   } catch (err) {
     console.error('❌ Erro ao inicializar banco:', err);
