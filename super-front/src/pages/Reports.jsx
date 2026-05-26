@@ -60,12 +60,17 @@ function Reports() {
         let loadedMessages = [];
         
         if (Array.isArray(data)) {
-          loadedMessages = data.map(m => ({
-            role: m.role === 'user' ? 'user' : 'jarvis',
-            content: m.content,
-            time: new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            animate: false
-          }));
+          loadedMessages = data.map(m => {
+            const date = new Date(m.createdAt);
+            const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            return {
+              role: m.role === 'user' ? 'user' : 'jarvis',
+              content: m.content,
+              time: `${dateStr} às ${timeStr}`,
+              animate: false
+            };
+          });
           setMessages(loadedMessages);
         }
 
@@ -94,7 +99,9 @@ function Reports() {
       });
       const data = await res.json();
       const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      const finalTimeStr = `${dateStr} às ${timeStr}`;
       
       let replyText = data.reply || 'Central offline.';
       const transicaoMatch = replyText.match(/\[TRANSICAO\]([\s\S]*?)\[/i) || replyText.match(/\[TRANSICAO\]([\s\S]*)$/i);
@@ -105,7 +112,7 @@ function Reports() {
       let spokenText = falaMatch ? falaMatch[1].trim() : replyText;
       let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
 
-      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: timeStr, animate: true }]);
+      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: finalTimeStr, animate: true }]);
       
       setSystemState("SIS.RESP");
       
@@ -321,9 +328,11 @@ function Reports() {
     }
 
     const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    const finalTimeStr = `${dateStr} às ${timeStr}`;
 
-    const newMessages = [...messagesRef.current, { role: 'user', content: textToSend, time: timeStr }];
+    const newMessages = [...messagesRef.current, { role: 'user', content: textToSend, time: finalTimeStr }];
     setMessages(newMessages);
     setSystemState("SIS.PROC");
 
@@ -352,9 +361,11 @@ function Reports() {
       let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
 
       const respTime = new Date();
+      const respDateStr = respTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const respTimeStr = `${respTime.getHours().toString().padStart(2, '0')}:${respTime.getMinutes().toString().padStart(2, '0')}:${respTime.getSeconds().toString().padStart(2, '0')}`;
+      const respFinalTimeStr = `${respDateStr} às ${respTimeStr}`;
       
-      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: respTimeStr, animate: true }]);
+      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: respFinalTimeStr, animate: true }]);
       setSystemState("SIS.RESP");
 
       const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';

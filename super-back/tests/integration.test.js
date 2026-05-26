@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import fetch from 'node:fetch'; // Node 20 tem fetch nativo, mas vamos garantir
 
 const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3005';
 

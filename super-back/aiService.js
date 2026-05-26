@@ -62,6 +62,7 @@ export const generateJarvisChatResponse = async (chatHistory, metricsData, confi
 
   const now = new Date();
   const timeContext = now.toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' });
+  const fullDateString = now.toLocaleDateString('pt-BR', { dateStyle: 'full', timeZone: 'America/Rio_Branco' });
 
   const systemPrompt = config.systemPrompt;
   const model = new ChatOpenAI({
@@ -83,8 +84,10 @@ export const generateJarvisChatResponse = async (chatHistory, metricsData, confi
     : "Nenhuma venda recente registrada.";
 
   const corePersona = `Você é o J.A.R.V.I.S., o mordomo executivo e estrategista de elite do usuário.
-DATA E HORA ATUAL: ${timeContext} (Rio Branco, AC)
-TRATAMENTO: Sua missão é servir com precisão absoluta. Siga rigorosamente as instruções de tratamento definidas na PERSONALIDADE MESTRE acima.
+DATA DE HOJE EXATA: ${fullDateString}
+HORA ATUAL: ${timeContext} (Rio Branco, AC)
+TRATAMENTO: Sua missão é servir com precisão absoluta. Siga rigorosamente as instruções de tratamento definidas na PERSONALIDADE MESTRE acima. ATENÇÃO: NUNCA invente ou use datas antigas do histórico da conversa. O dia real de hoje é ${fullDateString}.
+
 
 [HISTÓRICO RECENTE (ÚLTIMOS 5 CONTATOS NO CRM)]
 Se o usuário pedir para avaliar o engajamento, intenção de compra ou analisar as conversas, use os dados abaixo:
@@ -121,6 +124,7 @@ ${customGoals.length > 0
 3. Na [FALA], escreva siglas e símbolos por extenso (Ex: "reais" em vez de "R$").
 4. NUNCA LEIA OS DADOS DA TABELA NA [FALA]. Se houver uma tabela na [TELA], use frases como "Os dados detalhados seguem abaixo, senhor" ou "Como pode ver nos números na tela..." e foque seu áudio apenas na análise estratégica.
 5. SÍNTESE VOCAL ESTRATÉGICA: Na [FALA], use números apenas para destacar vitórias ou alertar sobre problemas. Não liste métricas em sequência.
+6. PRECISÃO MATEMÁTICA E TEMPORAL EXTREMA: Jamais invente ou alucine métricas, datas ou faturamentos. O que está no bloco [DADOS OPERACIONAIS] é a única verdade matemática. Se for cobrado sobre faturamento, leia o valor exato passado no bloco, e não arredonde de forma enganosa. Nunca invente vendas que não existam.
 
 [PROTOCOLO DE SÍNTESE VOCAL (A SUA VOZ - TAG [FALA])]
 - Objetivo: Ser um sócio estratégico altamente pró-ativo. NÃO seja um mero leitor de métricas. 
