@@ -228,6 +228,83 @@ const initDb = async () => {
 };
 initDb();
 
+export async function syncMercadoPhoneSales(limit = 100) {
+  const API_URL = process.env.MERCADOPHONE_API_URL;
+  const TOKEN = process.env.MERCADOPHONE_API_TOKEN;
+
+  if (!API_URL || !TOKEN) {
+    throw new Error('Configuracoes do MercadoPhone ausentes no .env');
+  }
+
+  console.log(`[SYNC] Sincronizando com MercadoPhone (limite: ${limit})...`);
+  
+  try {
+    const mpRes = await fetch(`${API_URL}?class=VendaApiController&method=index`, {
+      method: 'POST',
+      headers: {
+        'Authorization': TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        limit: limit,
+        page: 1,
+        order: 'id',
+        direction: 'desc'
+      })
+    });
+
+    if (!mpRes.ok) {
+      throw new Error(`Erro na API do MercadoPhone: ${mpRes.status} ${mpRes.statusText}`);
+    }
+
+    const mpData = await mpRes.json();
+    const sales = mpData.data?.itens || [];
+
+    let countNew = 0;
+
+    for (const sale of sales) {
+      const existing = await pool.query('SELECT id FROM "Sale" WHERE id = $1', [sale.id]);
+      
+      const telefone = sale.cliente?.telefone || sale.cliente?.telefoneSecundario || '';
+      const nome = sale.clienteNome;
+      const valor = sale.totalVenda;
+      const vendedor = sale.vendedorNome;
+      const produto = sale.itens?.[0]?.produtoNome || 'Produto Indefinido';
+      const tipoVenda = sale.tipoVendaDescricao || 'Offline';
+      const createdAt = sale.dataVenda;
+      const lucro = valor * 0.2;
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          'INSERT INTO "Sale" (id, "telefoneCliente", "nomeCliente", "vendedor", "produto", "valorTotal", "lucro", "canalVenda", "tipoVenda", "statusVenda", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+          [sale.id, telefone, nome, vendedor, produto, valor, lucro, 'MercadoPhone', tipoVenda, 'Concluído', createdAt]
+        );
+        countNew++;
+
+        const cleanPhone = telefone.replace(/\D/g, '');
+        if (cleanPhone) {
+          const leadSearch = await pool.query(
+            'SELECT id FROM "Lead" WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY "createdAt" DESC LIMIT 1', 
+            [cleanPhone, '55' + cleanPhone, cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone]
+          );
+          
+          if (leadSearch.rows.length > 0) {
+            await pool.query(
+              'UPDATE "Lead" SET status = $1, tags = $2, "productName" = $3, "updatedAt" = NOW() WHERE id = $4', 
+              ['Venda Concluída', [tipoVenda], produto, leadSearch.rows[0].id]
+            );
+          }
+        }
+      }
+    }
+
+    console.log(`[SYNC] Sincronizacao concluida. Novas vendas: ${countNew}`);
+    return { newSales: countNew, totalProcessed: sales.length };
+  } catch (err) {
+    console.error('[SYNC] Erro ao sincronizar:', err);
+    throw err;
+  }
+}
 
 app.use(cors({ 
   origin: '*', 
@@ -1091,6 +1168,16 @@ export async function runDailyJarvisAnalysis() {
 // Agenda para rodar todo dia às 03:00
 cron.schedule('0 3 * * *', runDailyJarvisAnalysis);
 
+// Sincronizacao periodica a cada 15 minutos com o MercadoPhone
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    console.log('[CRON] Iniciando sincronizacao agendada do MercadoPhone...');
+    await syncMercadoPhoneSales(200);
+  } catch (err) {
+    console.error('[CRON] Erro na sincronizacao agendada:', err);
+  }
+});
+
 // ROTA DASHBOARD ATUALIZADA
 app.get('/api/dashboard', async (req, res) => {
   // ANTI-CACHE: Força o navegador a sempre buscar dados novos
@@ -1257,6 +1344,13 @@ app.post('/api/jarvis/chat', async (req, res) => {
   const lastUserMessage = messages[messages.length - 1]?.content;
 
   try {
+    // Sincronizacao rapida preventiva antes de carregar metricas e responder pelo Jarvis
+    try {
+      await syncMercadoPhoneSales(100);
+    } catch (e) {
+      console.error('[JARVIS] Erro na sincronizacao preventiva:', e.message);
+    }
+
     // 1. Salva a última mensagem do usuário se for nova (e não for um comando de sistema/saudação)
     const isSystemCommand = lastUserMessage && (lastUserMessage.includes('Aja como se o sistema tivesse acabado de ser ativado') || lastUserMessage.includes('[FALA]'));
     
@@ -1629,84 +1723,12 @@ app.get('/api/pdv/dashboard', async (req, res) => {
 });
 
 app.get('/api/pdv/sync', async (req, res) => {
-  const API_URL = process.env.MERCADOPHONE_API_URL;
-  const TOKEN = process.env.MERCADOPHONE_API_TOKEN;
-
-  if (!API_URL || !TOKEN) {
-    return res.status(500).json({ error: 'Configurações do MercadoPhone ausentes no .env' });
-  }
-
   try {
-    console.log('🔄 [SYNC] Iniciando sincronização ativa com MercadoPhone...');
-    
-    // Busca as últimas 500 vendas para garantir histórico
-    const mpRes = await fetch(`${API_URL}?class=VendaApiController&method=index`, {
-      method: 'POST',
-      headers: {
-        'Authorization': TOKEN,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        limit: 500,
-        page: 1,
-        order: 'id',
-        direction: 'desc'
-      })
-    });
-
-    const mpData = await mpRes.json();
-    const sales = mpData.data?.itens || [];
-
-    let countNew = 0;
-    let countUpdated = 0;
-
-    for (const sale of sales) {
-      // Verifica se a venda já existe (usando o ID original do MercadoPhone)
-      // Como não temos a coluna originalId, vamos usar o createdAt + nomeCliente como check básico ou apenas tentar inserir e tratar erro
-      // Na verdade, vamos usar o ID que o MercadoPhone envia como nosso ID primário se possível, ou salvar em uma coluna.
-      // Vou tentar buscar pelo id (que agora sabemos que é o do MercadoPhone)
-      const existing = await pool.query('SELECT id FROM "Sale" WHERE id = $1', [sale.id]);
-      
-      const telefone = sale.cliente?.telefone || sale.cliente?.telefoneSecundario || '';
-      const nome = sale.clienteNome;
-      const valor = sale.totalVenda;
-      const vendedor = sale.vendedorNome;
-      const produto = sale.itens?.[0]?.produtoNome || 'Produto Indefinido';
-      const tipoVenda = sale.tipoVendaDescricao || 'Offline';
-      const createdAt = sale.dataVenda; // Formato "2026-05-09 16:13:00"
-      const lucro = valor * 0.2; // Estimativa se não vier na API
-
-      if (existing.rows.length === 0) {
-        await pool.query(
-          'INSERT INTO "Sale" (id, "telefoneCliente", "nomeCliente", "vendedor", "produto", "valorTotal", "lucro", "canalVenda", "tipoVenda", "statusVenda", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-          [sale.id, telefone, nome, vendedor, produto, valor, lucro, 'MercadoPhone', tipoVenda, 'Concluído', createdAt]
-        );
-        countNew++;
-
-        // Auto-move lead se existir (Busca Resiliente)
-        const cleanPhone = telefone.replace(/\D/g, '');
-        if (cleanPhone) {
-          const leadSearch = await pool.query(
-            'SELECT id FROM "Lead" WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY "createdAt" DESC LIMIT 1', 
-            [cleanPhone, '55' + cleanPhone, cleanPhone.startsWith('55') ? cleanPhone.substring(2) : cleanPhone]
-          );
-          
-          if (leadSearch.rows.length > 0) {
-            await pool.query(
-              'UPDATE "Lead" SET status = $1, tags = $2, "productName" = $3, "updatedAt" = NOW() WHERE id = $4', 
-              ['Venda Concluída', [tipoVenda], produto, leadSearch.rows[0].id]
-            );
-          }
-        }
-      }
-    }
-
-    console.log(`✅ [SYNC] Sincronização concluída. Novas: ${countNew}`);
-    res.json({ status: 'success', new_sales: countNew, total_processed: sales.length });
-
+    const result = await syncMercadoPhoneSales(500);
+    res.json({ status: 'success', new_sales: result.newSales, total_processed: result.totalProcessed });
   } catch (err) {
-    console.error('❌ [SYNC] Erro ao sincronizar:', err);
-    res.status(500).json({ error: 'Falha na sincronização' });
+    console.error('[SYNC] Erro ao sincronizar pela rota:', err);
+    res.status(500).json({ error: 'Falha na sincronizacao' });
   }
 });
 
