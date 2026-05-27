@@ -306,6 +306,46 @@ export async function syncMercadoPhoneSales(limit = 100) {
   }
 }
 
+export function getAcreDateRange(periodo) {
+  const now = new Date();
+  const ACRE_OFFSET = 5 * 60 * 60 * 1000;
+  
+  const getUTCStartAndEndForAcreDate = (acreDate) => {
+    const start = new Date(acreDate);
+    start.setUTCHours(0, 0, 0, 0);
+    const startUTC = new Date(start.getTime() + ACRE_OFFSET);
+
+    const end = new Date(acreDate);
+    end.setUTCHours(23, 59, 59, 999);
+    const endUTC = new Date(end.getTime() + ACRE_OFFSET);
+
+    return [startUTC, endUTC];
+  };
+
+  const acreNow = new Date(now.getTime() - ACRE_OFFSET);
+
+  if (periodo === 'hoje') {
+    return getUTCStartAndEndForAcreDate(acreNow);
+  } else if (periodo === 'ontem') {
+    const acreYesterday = new Date(acreNow);
+    acreYesterday.setUTCDate(acreYesterday.getUTCDate() - 1);
+    return getUTCStartAndEndForAcreDate(acreYesterday);
+  } else if (periodo === '7dias') {
+    const startAcre = new Date(acreNow);
+    startAcre.setUTCDate(startAcre.getUTCDate() - 7);
+    startAcre.setUTCHours(0, 0, 0, 0);
+    const startUTC = new Date(startAcre.getTime() + ACRE_OFFSET);
+    return [startUTC, now];
+  } else if (periodo === 'mes') {
+    const startAcre = new Date(acreNow);
+    startAcre.setUTCDate(startAcre.getUTCDate() - 30);
+    startAcre.setUTCHours(0, 0, 0, 0);
+    const startUTC = new Date(startAcre.getTime() + ACRE_OFFSET);
+    return [startUTC, now];
+  }
+  return [now, now];
+}
+
 app.use(cors({ 
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
@@ -1077,53 +1117,12 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   let wherePDV = "";
   let paramsPDV = [];
 
-  const getLocalTodayRange = () => {
-    const start = new Date();
-    start.setHours(0,0,0,0);
-    const end = new Date();
-    end.setHours(23,59,59,999);
-    return [start, end];
-  };
-
-  const getLocalYesterdayRange = () => {
-    const start = new Date();
-    start.setDate(start.getDate() - 1);
-    start.setHours(0,0,0,0);
-    const end = new Date();
-    end.setDate(end.getDate() - 1);
-    end.setHours(23,59,59,999);
-    return [start, end];
-  };
-
   if (periodo === 'personalizado' && dateStart && dateEnd) {
       wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
       paramsPDV = [new Date(dateStart), new Date(dateEnd)];
-  } else if (periodo === 'hoje') { 
-      const [start, end] = getLocalTodayRange();
-      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
-      paramsPDV = [start, end];
-  }
-  else if (periodo === '7dias') { 
-      const start = new Date();
-      start.setDate(start.getDate() - 7);
-      start.setHours(0,0,0,0);
-      const end = new Date();
-      end.setHours(23,59,59,999);
-      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
-      paramsPDV = [start, end];
-  }
-  else if (periodo === 'mes') { 
-      const start = new Date();
-      start.setDate(start.getDate() - 30);
-      start.setHours(0,0,0,0);
-      const end = new Date();
-      end.setHours(23,59,59,999);
-      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
-      paramsPDV = [start, end];
-  }
-  else if (periodo === 'ontem') { 
-      const [start, end] = getLocalYesterdayRange();
-      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+  } else {
+      const [start, end] = getAcreDateRange(periodo);
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
       paramsPDV = [start, end];
   }
 
@@ -1446,38 +1445,18 @@ app.post('/api/jarvis/chat', async (req, res) => {
     } catch (e) { console.error('Erro ao buscar campanhas para o Jarvis:', e); }
     
     // CONTAGEM EM TEMPO REAL DO CRM (PARA TODOS OS PERÍODOS)
-    const getLocalTodayRange = () => {
-      const start = new Date();
-      start.setHours(0,0,0,0);
-      const end = new Date();
-      end.setHours(23,59,59,999);
-      return [start, end];
-    };
+    const [todayStart, todayEnd] = getAcreDateRange('hoje');
+    const [yesterdayStart, yesterdayEnd] = getAcreDateRange('ontem');
+    const [start7d] = getAcreDateRange('7dias');
+    const [start30d] = getAcreDateRange('mes');
 
-    const getLocalYesterdayRange = () => {
-      const start = new Date();
-      start.setDate(start.getDate() - 1);
-      start.setHours(0,0,0,0);
-      const end = new Date();
-      end.setDate(end.getDate() - 1);
-      end.setHours(23,59,59,999);
-      return [start, end];
-    };
-
-    const [todayStart, todayEnd] = getLocalTodayRange();
-    const [yesterdayStart, yesterdayEnd] = getLocalYesterdayRange();
-
-    const start7d = new Date();
-    start7d.setDate(start7d.getDate() - 7);
-    start7d.setHours(0,0,0,0);
-
-    const start30d = new Date();
-    start30d.setDate(start30d.getDate() - 30);
-    start30d.setHours(0,0,0,0);
-
-    const startMonth = new Date();
-    startMonth.setDate(1);
-    startMonth.setHours(0,0,0,0);
+    const now = new Date();
+    const ACRE_OFFSET = 5 * 60 * 60 * 1000;
+    const acreNow = new Date(now.getTime() - ACRE_OFFSET);
+    const startMonthAcre = new Date(acreNow);
+    startMonthAcre.setUTCDate(1);
+    startMonthAcre.setUTCHours(0, 0, 0, 0);
+    const startMonth = new Date(startMonthAcre.getTime() + ACRE_OFFSET);
 
     const leadsHojeDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count));
     const leadsOntemDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count));
@@ -1522,6 +1501,7 @@ app.post('/api/jarvis/chat', async (req, res) => {
         leads_facebook: Number(m.msgConversations),
         contatos_crm: contatosReais !== null ? contatosReais : 'N/A',
         faturamento: Number(d.pdv.faturamento).toFixed(2),
+        vendas: Number(d.pdv.qtd || 0),
         cliques: m.clicks,
         impressoes: m.impressions,
         ctr: ctr.toFixed(2) + "%",
@@ -1718,19 +1698,17 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
 app.get('/api/pdv/dashboard', async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
-    const today = new Date();
-    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
-    const localDateStr = localDate.toISOString().split('T')[0];
-
-    let dateFilter = 'WHERE "createdAt"::date = $1';
-    let queryParams = [localDateStr];
+    const [todayStart, todayEnd] = getAcreDateRange('hoje');
+    
+    let dateFilter = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
+    let queryParams = [todayStart, todayEnd];
 
     if (startDate && endDate) {
-      dateFilter = 'WHERE "createdAt"::date BETWEEN $1 AND $2';
-      queryParams = [startDate, endDate];
+      dateFilter = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
+      queryParams = [new Date(startDate), new Date(endDate)];
     } else if (startDate) {
-      dateFilter = 'WHERE "createdAt"::date >= $1';
-      queryParams = [startDate];
+      dateFilter = 'WHERE "createdAt" >= $1';
+      queryParams = [new Date(startDate)];
     }
 
     // Métricas do Período

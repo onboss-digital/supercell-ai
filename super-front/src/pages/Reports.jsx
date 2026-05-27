@@ -255,13 +255,25 @@ function Reports() {
   };
 
   const deleteHistory = async () => {
-    if (!window.confirm('Tem certeza que deseja EXPURGAR todo o histórico estratégico do banco de dados? Esta ação é irreversível.')) return;
+    if (!window.confirm('Tem certeza que deseja REINICIAR o J.A.R.V.I.S.? Isso irá expurgar todo o histórico de conversas do banco de dados e sincronizar os sistemas do zero.')) return;
     try {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      window.speechSynthesis.cancel();
+      setIsJarvisSpeaking(false);
+
       await fetch(`${API_URL}/api/jarvis/history`, { method: 'DELETE' });
       setMessages([]);
-      showNotification('success', 'MEMÓRIA EXPURGADA', 'Todo o histórico foi removido do núcleo central.');
+      sessionStorage.removeItem('jarvis_voice_greeted');
+      hasGreetedRef.current = false;
+      showNotification('success', 'SISTEMAS REINICIADOS', 'Memória do núcleo central limpa com sucesso. Inicializando J.A.R.V.I.S...');
+      
+      fetchGreeting([]);
     } catch (err) {
       console.error('Erro ao limpar banco:', err);
+      showNotification('error', 'FALHA NO SISTEMA', 'Não foi possível restabelecer conexão para reiniciar.');
     }
   };
 
@@ -771,6 +783,13 @@ function Reports() {
               {isChatExpanded ? 'close_fullscreen' : 'open_in_full'}
             </span>
             <span className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors">settings</span>
+            <span 
+              className="material-icons-outlined text-[16px] cursor-pointer hover:text-red-400 transition-colors"
+              onClick={deleteHistory}
+              title="Reiniciar J.A.R.V.I.S. (Limpar Histórico)"
+            >
+              restart_alt
+            </span>
             <span 
               className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors"
               onClick={() => setIsHistoryOpen(true)}
