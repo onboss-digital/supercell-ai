@@ -1064,20 +1064,55 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   // Vendas PDV
   let wherePDV = "";
   let paramsPDV = [];
+
+  const getLocalTodayRange = () => {
+    const start = new Date();
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    end.setHours(23,59,59,999);
+    return [start, end];
+  };
+
+  const getLocalYesterdayRange = () => {
+    const start = new Date();
+    start.setDate(start.getDate() - 1);
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    end.setDate(end.getDate() - 1);
+    end.setHours(23,59,59,999);
+    return [start, end];
+  };
+
   if (periodo === 'personalizado' && dateStart && dateEnd) {
       wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
       paramsPDV = [new Date(dateStart), new Date(dateEnd)];
   } else if (periodo === 'hoje') { 
-      wherePDV = 'WHERE DATE("createdAt") = CURRENT_DATE'; 
+      const [start, end] = getLocalTodayRange();
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
   }
   else if (periodo === '7dias') { 
-      wherePDV = 'WHERE "createdAt" >= CURRENT_DATE - INTERVAL \'7 days\''; 
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setHours(23,59,59,999);
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
   }
   else if (periodo === 'mes') { 
-      wherePDV = "WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '30 days'"; 
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setHours(23,59,59,999);
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
   }
   else if (periodo === 'ontem') { 
-      wherePDV = "WHERE DATE(\"createdAt\") = CURRENT_DATE - INTERVAL '1 day'"; 
+      const [start, end] = getLocalYesterdayRange();
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
   }
 
   const salesRes = await pool.query(`SELECT SUM("valorTotal") as total, COUNT(*) as qtd, SUM(CASE WHEN "tipoVenda" = 'Trafego Pago' THEN "valorTotal" ELSE 0 END) as total_trafego FROM "Sale" ${wherePDV}`, paramsPDV);
@@ -1399,13 +1434,46 @@ app.post('/api/jarvis/chat', async (req, res) => {
     } catch (e) { console.error('Erro ao buscar campanhas para o Jarvis:', e); }
     
     // CONTAGEM EM TEMPO REAL DO CRM (PARA TODOS OS PERÍODOS)
-    const leadsHojeDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= CURRENT_DATE').then(r => parseInt(r.rows[0].count));
-    const leadsOntemDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '1 day' AND \"createdAt\" < CURRENT_DATE").then(r => parseInt(r.rows[0].count));
-    const leads7DiasDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '7 days'").then(r => parseInt(r.rows[0].count));
-    const leads30DiasDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE \"createdAt\" >= CURRENT_DATE - INTERVAL '30 days'").then(r => parseInt(r.rows[0].count));
-    const leadsMesDB = await pool.query("SELECT COUNT(*) FROM \"Lead\" WHERE date_trunc('month', \"createdAt\") = date_trunc('month', CURRENT_DATE)").then(r => parseInt(r.rows[0].count));
+    const getLocalTodayRange = () => {
+      const start = new Date();
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setHours(23,59,59,999);
+      return [start, end];
+    };
 
-    const salesToday = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt" >= CURRENT_DATE').then(r => parseInt(r.rows[0].count));
+    const getLocalYesterdayRange = () => {
+      const start = new Date();
+      start.setDate(start.getDate() - 1);
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setDate(end.getDate() - 1);
+      end.setHours(23,59,59,999);
+      return [start, end];
+    };
+
+    const [todayStart, todayEnd] = getLocalTodayRange();
+    const [yesterdayStart, yesterdayEnd] = getLocalYesterdayRange();
+
+    const start7d = new Date();
+    start7d.setDate(start7d.getDate() - 7);
+    start7d.setHours(0,0,0,0);
+
+    const start30d = new Date();
+    start30d.setDate(start30d.getDate() - 30);
+    start30d.setHours(0,0,0,0);
+
+    const startMonth = new Date();
+    startMonth.setDate(1);
+    startMonth.setHours(0,0,0,0);
+
+    const leadsHojeDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count));
+    const leadsOntemDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count));
+    const leads7DiasDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start7d]).then(r => parseInt(r.rows[0].count));
+    const leads30DiasDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start30d]).then(r => parseInt(r.rows[0].count));
+    const leadsMesDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startMonth]).then(r => parseInt(r.rows[0].count));
+
+    const salesToday = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count));
     
     const recentLeadsRes = await pool.query(`
       SELECT l.name, l.status, l.platform,
@@ -1638,8 +1706,12 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
 app.get('/api/pdv/dashboard', async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
-    let dateFilter = 'WHERE "createdAt"::date = CURRENT_DATE';
-    let queryParams = [];
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
+    const localDateStr = localDate.toISOString().split('T')[0];
+
+    let dateFilter = 'WHERE "createdAt"::date = $1';
+    let queryParams = [localDateStr];
 
     if (startDate && endDate) {
       dateFilter = 'WHERE "createdAt"::date BETWEEN $1 AND $2';
