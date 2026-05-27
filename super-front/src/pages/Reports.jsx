@@ -827,7 +827,7 @@ function Reports() {
 
         {/* Top HUD Section */}
         {!isChatExpanded && (
-          <div className="relative flex-none flex flex-col items-center justify-center min-h-[380px] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
+          <div className="relative flex-none flex flex-col items-center justify-center md:min-h-[380px] min-h-[190px] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
           
           {/* Data Greebles Left */}
           <div className="absolute top-6 left-6 text-primary/40 text-[10px] leading-tight tracking-widest hidden sm:block">
@@ -844,7 +844,7 @@ function Reports() {
           </div>
 
           {/* Center Visualizer HUD */}
-          <div className="relative flex items-center justify-center w-80 h-80 mt-4 mb-8">
+          <div className="relative flex items-center justify-center w-80 h-80 mt-4 mb-8 md:scale-100 scale-[0.55] origin-center">
             
             {/* Background Atmosphere (Aura) */}
             <div className="absolute w-64 h-64 bg-primary/5 rounded-full blur-[60px] animate-pulse"></div>

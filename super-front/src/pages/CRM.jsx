@@ -431,7 +431,7 @@ function CRM() {
 
   return (
 
-    <main className="main-content" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', padding: 0, position: 'relative' }}>
+    <main className="main-content" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: 0, position: 'relative' }}>
 
       
 
