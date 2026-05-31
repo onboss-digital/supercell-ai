@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { generateAiInsights, generateJarvisChatResponse } from './aiService.js';
+import { calcularLucroReal } from './product_costs.js';
 import cron from 'node-cron';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
@@ -260,7 +261,7 @@ export async function syncMercadoPhoneSales(limit = 100) {
       const produto = sale.itens?.[0]?.produtoNome || 'Produto Indefinido';
       const tipoVenda = sale.tipoVendaDescricao || 'Offline';
       const createdAt = sale.dataVenda;
-      const lucro = valor * 0.2;
+      const lucro = calcularLucroReal(produto, valor);
 
       if (existing.rows.length === 0) {
         await pool.query(
@@ -1382,7 +1383,7 @@ app.post('/api/jarvis/chat', async (req, res) => {
     }
 
     // 2. Busca histórico RECENTE do banco para dar contexto real (Memória Permanente)
-    const historyRes = await pool.query('SELECT role, content FROM "JarvisMessage" ORDER BY "createdAt" DESC LIMIT 20');
+    const historyRes = await pool.query('SELECT role, content, "createdAt" FROM "JarvisMessage" ORDER BY "createdAt" DESC LIMIT 20');
     const dbHistory = historyRes.rows.reverse();
 
     // Mescla histórico do banco com as mensagens atuais da sessão (evita duplicidade e garante contexto)
@@ -1627,7 +1628,7 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
   const vendedor = body.vendedor || body.seller_name || body.vendedor_nome;
   const produto = body.produto || body.product_name || body.item;
   const valorTotal = body.valorTotal || body.valor || body.amount || body.total;
-  const lucro = body.lucro || body.profit || (parseFloat(valorTotal) * 0.2);
+  let lucro = body.lucro || body.profit;
   const canalVenda = body.canalVenda || body.canal_venda || body.canal || body.channel || 'MercadoPhone';
   const tipoVenda = body.tipoVenda || body.tipo_venda || body.origem || body.sale_type || 'Offline';
   const statusVenda = body.statusVenda || body.status_venda || body.status || 'Concluído';
@@ -1644,6 +1645,10 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
     let cleanValue = valorTotal;
     if (typeof valorTotal === 'string') {
         cleanValue = parseFloat(valorTotal.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.'));
+    }
+
+    if (!lucro) {
+        lucro = calcularLucroReal(produto, cleanValue);
     }
 
     const saleRes = await pool.query(

@@ -79,7 +79,7 @@ function Funnel() {
   return (
     <main className="main-content">
       {/* Filters Bar Superior */}
-      <div className="filters-bar" style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', padding: '1.5rem', background: 'var(--color-surface-container-lowest)', borderRadius: '1rem', border: '1px solid var(--color-surface-container-low)', marginBottom: '2rem' }}>
+      <div className="filters-bar" style={{ padding: '1.5rem', background: 'var(--color-surface-container-lowest)', borderRadius: '1rem', border: '1px solid var(--color-surface-container-low)', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
           <span className="material-icons-outlined" style={{ color: 'var(--color-primary)' }}>date_range</span>
           <select className="filter-select" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ border: 'none', background: 'var(--color-surface-container-low)', padding: '0.6rem 1rem', borderRadius: '0.5rem', fontWeight: '600', outline: 'none', cursor: 'pointer' }}>
@@ -91,13 +91,8 @@ function Funnel() {
           </select>
           
           {periodo === 'personalizado' && (
-             <div style={{ 
-               display: 'flex', alignItems: 'center', gap: '0.8rem', 
-               background: 'var(--color-surface-container-lowest)', padding: '0.5rem 1rem', 
-               borderRadius: '0.75rem', border: '2px solid #0ea5e9',
-               boxShadow: '0 10px 25px rgba(14, 165, 233, 0.15)'
-             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+             <div className="funnel-datepicker-container">
+                <div className="funnel-datepicker-inputs">
                   <DatePicker 
                     selected={dataInicio} onChange={(date) => { setDataInicio(date); setTriggerFetch(0); }} 
                     selectsStart startDate={dataInicio} endDate={dataFim} 
@@ -128,11 +123,7 @@ function Funnel() {
       {loading && <div style={{ marginBottom: '1rem', color: 'var(--color-primary)', fontWeight: 'bold' }}>Sincronizando funil omnichannel...</div>}
 
       {/* Top Metrics Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-        gap: '1.5rem', 
-        marginBottom: '2rem',
+      <div className="funnel-metrics-grid" style={{ 
         opacity: loading ? 0.6 : 1,
         transition: 'opacity 0.3s'
       }}>
@@ -210,7 +201,7 @@ function Funnel() {
         </div>
       </div>
 
-      <div className="funnel-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div className="funnel-summary" style={{ marginBottom: '2rem' }}>
         {/* Visual Funnel Representation */}
         <section className="card" style={{ padding: 'var(--card-padding, 2rem)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', gap: '1rem', flexWrap: 'wrap' }}>
@@ -221,11 +212,11 @@ function Funnel() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', opacity: loading ? 0.6 : 1, transition: 'opacity 0.3s' }}>
             {(() => {
               const omnichannelSteps = [
-                { label: 'Alcance (Meta)', value: summary.reach, color: '#BBF7D0' },
-                { label: 'Impressões (Meta)', value: summary.impressions, color: '#86EFAC' },
-                { label: 'Cliques no Link (Meta)', value: summary.linkClicks, color: '#4ADE80' },
-                { label: 'Mensagens (Meta)', value: summary.messages, color: '#22C55E' },
-                { label: 'Vendas (PDV)', value: summary.purchases, color: '#16A34A' }
+                { label: 'Alcance (Meta)', value: summary.reach, color: 'linear-gradient(90deg, #0284c7, #0ea5e9)' },
+                { label: 'Impressões (Meta)', value: summary.impressions, color: 'linear-gradient(90deg, #0ea5e9, #06b6d4)' },
+                { label: 'Cliques no Link (Meta)', value: summary.linkClicks, color: 'linear-gradient(90deg, #0d9488, #10b981)' },
+                { label: 'Mensagens (Meta)', value: summary.messages, color: 'linear-gradient(90deg, #10b981, #f59e0b)' },
+                { label: 'Vendas (PDV)', value: summary.purchases, color: 'linear-gradient(90deg, #f59e0b, #ef4444)' }
               ];
 
               const maxValue = Math.max(...omnichannelSteps.map(s => s.value || 0)) || 1;
@@ -236,36 +227,33 @@ function Funnel() {
                 const conversion = index > 0 ? (step.value / omnichannelSteps[index-1].value) * 100 : 100;
                 
                 return (
-                  <div key={step.label} style={{ position: 'relative' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--funnel-gap, 1.5rem)', marginBottom: '0.25rem' }}>
-                      <div style={{ width: 'var(--label-width, 180px)', fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', lineHeight: '1.2' }}>
+                  <div key={step.label} className="funnel-step-wrapper">
+                    <div className="funnel-step-row">
+                      <div className="funnel-step-label">
                         {step.label}
                       </div>
-                      <div style={{ flex: 1, position: 'relative', height: '40px', background: 'var(--color-surface-container-lowest)', borderRadius: '6px', overflow: 'hidden' }}>
-                        <div style={{ 
-                          width: `${Math.max(widthPercentage, 0.5)}%`, 
-                          height: '100%', 
-                          background: step.color, 
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: '0.9rem',
-                          fontWeight: '900',
-                          border: 'none',
-                          transition: 'width 1.5s cubic-bezier(0.16, 1, 0.3, 1)',
-                          textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                        }}>
-                          {(step.value || 0).toLocaleString()}
-                        </div>
+                      <div className="funnel-step-bar-container">
+                        <div 
+                          className="funnel-step-bar"
+                          style={{ 
+                            width: `${Math.max(widthPercentage, 0.5)}%`, 
+                            background: step.color,
+                          }}
+                        />
                       </div>
-                      <div className="desktop-only" style={{ width: '70px', textAlign: 'right', fontSize: '1.1rem', fontWeight: '900', color: 'var(--color-on-surface)' }}>
-                        {index === 0 ? '100%' : `${conversion.toFixed(1)}%`}
+                      <div className="funnel-step-percent">
+                        <span className="funnel-step-value">
+                          {(step.value || 0).toLocaleString()}
+                        </span>
+                        <span className="funnel-step-divider">|</span>
+                        <span className="funnel-step-rate">
+                          {index === 0 ? '100%' : `${conversion.toFixed(1)}%`}
+                        </span>
                       </div>
                     </div>
                     {index < omnichannelSteps.length - 1 && (
-                      <div style={{ marginLeft: 'var(--connector-margin, 195px)', height: '16px', borderLeft: '2px dashed var(--color-surface-container-highest)', position: 'relative' }}>
-                        <span className="material-icons-outlined" style={{ position: 'absolute', top: '-4px', left: '-10px', fontSize: '18px', color: 'var(--color-surface-container-highest)' }}>expand_more</span>
+                      <div className="funnel-connector">
+                        <span className="material-icons-outlined">expand_more</span>
                       </div>
                     )}
                   </div>
@@ -277,7 +265,7 @@ function Funnel() {
 
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--main-grid, repeat(2, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
         {/* Vendas por Origem */}
         <section className="card" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontWeight: '800', marginBottom: '1.5rem', fontSize: '1rem' }}>Distribuição de Vendas</h3>
@@ -321,7 +309,7 @@ function Funnel() {
 
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--main-grid, repeat(2, 1fr))', gap: '2rem' }}>
         <section className="card" style={{ padding: 'var(--card-padding, 2rem)' }}>
           <h3 style={{ fontWeight: '800', marginBottom: '1.5rem' }}>Mensagens / Leads (Volume Diário)</h3>
           <div style={{ width: '100%', height: '280px' }}>

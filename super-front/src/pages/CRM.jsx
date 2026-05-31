@@ -26,6 +26,9 @@ function CRM() {
 
   const [stats, setStats] = useState({ leadsHoje: 0, vendasHoje: 0, valorVendasHoje: 0, conversao: '0.0' });
 
+  // Novo estado para abas do modal no mobile
+  const [activeModalTab, setActiveModalTab] = useState('chat');
+
 
 
   // Estados de Filtro
@@ -363,6 +366,7 @@ function CRM() {
   useEffect(() => {
 
     if (selectedLead) {
+      setActiveModalTab('chat');
 
       setLoadingMessages(true);
 
@@ -440,21 +444,11 @@ function CRM() {
 
       {/* Jarvis Insights Header */}
 
-      <div style={{ padding: '1.5rem 1.5rem 0 1.5rem' }}>
+      <div className="crm-header-wrapper">
 
-        <div style={{ 
+        <div className="crm-header-card">
 
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', 
-
-          borderRadius: '1.25rem', padding: '1.5rem', color: 'white',
-
-          display: 'flex', flexDirection: 'column', gap: '1rem',
-
-          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
-
-        }}>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="crm-header-top-row">
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
 
@@ -470,7 +464,7 @@ function CRM() {
 
             
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
+            <div className="crm-header-actions">
 
               <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', padding: '0.3rem', borderRadius: '2rem', gap: '0.3rem' }}>
 
@@ -510,6 +504,7 @@ function CRM() {
 
                 FILTRAR {(statusFilter !== 'Todos' || platformFilter !== 'Todos' || tempFilter !== 'Todos' || campaignSearch || adSearch) && "•"}
               </button>
+
             </div>
 
           </div>
@@ -521,36 +516,30 @@ function CRM() {
           <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
 
              {/* Stats Cards Dinâmicos */}
-             <div style={{ flex: 1, minWidth: '120px', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Total de Leads</p>
-                <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.total}</p>
-             </div>
-             <div style={{ flex: 1, minWidth: '120px', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Em Atendimento</p>
-                <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.ativos}</p>
-             </div>
-             <div style={{ flex: 1, minWidth: '120px', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Vendas Fechadas</p>
-                <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.convertidos}</p>
-             </div>
-             <div style={{ flex: 1, minWidth: '120px', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Conversão</p>
-                <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem', color: dynamicStats.conversao > 0 ? '#10B981' : 'white' }}>{dynamicStats.conversao}%</p>
+             <div className="crm-stats-grid">
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                   <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Total de Leads</p>
+                   <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.total}</p>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                   <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Em Atendimento</p>
+                   <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.ativos}</p>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                   <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Vendas Fechadas</p>
+                   <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem' }}>{dynamicStats.convertidos}</p>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                   <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: '800', textTransform: 'uppercase' }}>Conversão</p>
+                   <p style={{ fontSize: '1.25rem', fontWeight: '900', marginTop: '0.2rem', color: dynamicStats.conversao > 0 ? '#10B981' : 'white' }}>{dynamicStats.conversao}%</p>
+                </div>
              </div>
 
              
 
              {leads.filter(l => l.temperature === 'Frio' && l.status !== 'Venda Concluída').length > 0 && (
 
-                <div style={{ 
-
-                  flex: 2, minWidth: '300px', padding: '1rem', background: 'rgba(225,29,72,0.1)', 
-
-                  borderRadius: '1rem', border: '1px solid rgba(225,29,72,0.2)',
-
-                  display: 'flex', alignItems: 'center', gap: '1rem'
-
-                }}>
+                 <div className="crm-remarketing-card">
 
                   <div style={{ background: '#E11D48', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
 
@@ -658,7 +647,7 @@ function CRM() {
         {viewType === 'list' ? (
 
           <section style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem' }}>
-
+            <div className="desktop-table-view table-responsive">
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.75rem' }}>
 
                 <thead>
@@ -867,27 +856,177 @@ function CRM() {
 
               </table>
 
+            </div>
+
+
+
+            {/* Mobile Card List View */}
+
+            <div className="mobile-card-list">
+
+              {filteredLeads.map(lead => (
+
+                <div 
+
+                  key={lead.id} 
+
+                  onClick={() => setSelectedLead(lead)} 
+
+                  style={{ 
+
+                    background: 'var(--color-surface-container-lowest)', 
+
+                    borderRadius: '1rem', 
+
+                    padding: '1.25rem', 
+
+                    border: '1px solid var(--color-surface-container-low)',
+
+                    display: 'flex',
+
+                    flexDirection: 'column',
+
+                    gap: '0.75rem',
+
+                    cursor: 'pointer',
+
+                    position: 'relative'
+
+                  }}
+
+                >
+
+                  {lead.hasUnread && (
+
+                    <div style={{ position: 'absolute', top: '1rem', right: '1rem', background: '#0ea5e9', width: '10px', height: '10px', borderRadius: '50%', boxShadow: '0 0 10px #0ea5e9' }} />
+
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+
+                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: '900', fontSize: '0.85rem', overflow: 'hidden' }}>
+
+                      {lead.profilePic ? (
+
+                        <img src={lead.profilePic} alt={lead.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+
+                      ) : (
+
+                        (lead.name || 'L').charAt(0)
+
+                      )}
+
+                    </div>
+
+                    <div>
+
+                      <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: 'var(--color-on-surface)' }}>{lead.name}</h4>
+
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+
+                        {lead.platform === 'instagram' ? `@${lead.instagramHandle || 'direct'}` : lead.phone}
+
+                      </p>
+
+                    </div>
+
+                    <span style={{ 
+
+                      marginLeft: 'auto', 
+
+                      padding: '0.2rem 0.5rem', 
+
+                      borderRadius: '4px', 
+
+                      fontSize: '0.6rem', 
+
+                      fontWeight: '900', 
+
+                      background: `${getStatusColor(lead.status)}15`, 
+
+                      color: getStatusColor(lead.status) 
+
+                    }}>
+
+                      {lead.status.toUpperCase()}
+
+                    </span>
+
+                  </div>
+
+                  
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', borderTop: '1px solid var(--color-surface-container-low)', paddingTop: '0.75rem' }}>
+
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+
+                      {lead.tags?.slice(0, 2).map(tag => (
+
+                        <span key={tag} style={{ 
+
+                          padding: '0.15rem 0.4rem', 
+
+                          borderRadius: '4px', 
+
+                          fontSize: '0.55rem', 
+
+                          fontWeight: '900', 
+
+                          background: tag === 'Tráfego Pago' ? 'rgba(0, 255, 255, 0.1)' : 'rgba(148, 163, 184, 0.1)',
+
+                          color: tag === 'Tráfego Pago' ? 'var(--color-primary)' : '#94a3b8',
+
+                          border: `1px solid ${tag === 'Tráfego Pago' ? 'var(--color-primary)' : '#94a3b8'}20`
+
+                        }}>
+
+                          {tag.toUpperCase()}
+
+                        </span>
+
+                      ))}
+
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: getTempColor(lead.temperature) }}></div>
+
+                      <span style={{ fontWeight: '800', fontSize: '0.7rem' }}>{lead.temperature}</span>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
           </section>
+
+
 
         ) : (
 
-          <section style={{ flex: 1, display: 'flex', padding: '1.5rem', gap: '1.5rem', overflowX: 'auto', background: '#f8fafc', alignItems: 'flex-start' }} className="kanban-scroll">
+          <section className="crm-kanban-section kanban-scroll">
 
             {statuses.map(status => (
 
-              <div key={status} onDragOver={onDragOver} onDrop={(e) => onDrop(e, status)} style={{ flexShrink: 0, width: '300px', display: 'flex', flexDirection: 'column', background: 'rgba(241, 245, 249, 0.5)', borderRadius: '1.25rem', height: '100%', border: '1px solid #e2e8f0' }}>
+              <div key={status} onDragOver={onDragOver} onDrop={(e) => onDrop(e, status)} className="crm-kanban-column">
 
-                <div style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="crm-kanban-column-header">
 
                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
 
                       <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(status) }}></div>
 
-                      <h3 style={{ fontSize: '0.85rem', fontWeight: '900', color: '#1e293b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{status}</h3>
+                      <h3 className="crm-kanban-column-title">{status}</h3>
 
                    </div>
 
-                   <span style={{ background: '#e2e8f0', padding: '0.2rem 0.6rem', borderRadius: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>{filteredLeads.filter(l => l.status === status).length}</span>
+                   <span className="crm-kanban-column-badge">{filteredLeads.filter(l => l.status === status).length}</span>
 
                 </div>
 
@@ -895,7 +1034,7 @@ function CRM() {
 
                    {filteredLeads.filter(l => l.status === status).map(lead => (
 
-                     <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} onDragEnd={onDragEnd} onClick={() => setSelectedLead(lead)} style={{ background: 'white', padding: '1rem', borderRadius: '0.85rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', border: '1px solid #f1f5f9', cursor: 'grab', transition: '0.2s' }}>
+                     <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} onDragEnd={onDragEnd} onClick={() => setSelectedLead(lead)} className="crm-kanban-card">
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
 
@@ -935,7 +1074,7 @@ function CRM() {
 
                         </div>
 
-                        <div style={{ fontSize: '0.7rem', color: '#0f172a', fontWeight: '800', marginBottom: '0.4rem' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-on-surface-variant)', fontWeight: '800', marginBottom: '0.4rem' }}>
 
                            {lead.platform === 'instagram' ? `@${lead.instagramHandle || 'direct'}` : lead.phone}
 
@@ -947,11 +1086,11 @@ function CRM() {
 
                              {lead.tags.slice(0, 3).map(tag => (
 
-                               <span key={tag} style={{ fontSize: '0.5rem', background: '#f1f5f9', color: '#64748b', padding: '0.15rem 0.4rem', borderRadius: '2px', fontWeight: '900' }}>{tag.toUpperCase()}</span>
+                               <span key={tag} style={{ fontSize: '0.5rem', background: 'var(--color-surface-container-highest)', color: 'var(--color-primary)', padding: '0.15rem 0.4rem', borderRadius: '2px', fontWeight: '900' }}>{tag.toUpperCase()}</span>
 
                              ))}
 
-                             {lead.tags.length > 3 && <span style={{ fontSize: '0.5rem', color: '#94a3b8', fontWeight: '800' }}>+{lead.tags.length - 3}</span>}
+                             {lead.tags.length > 3 && <span style={{ fontSize: '0.5rem', color: 'var(--color-on-surface-variant)', fontWeight: '800' }}>+{lead.tags.length - 3}</span>}
 
                           </div>
 
@@ -1213,21 +1352,30 @@ function CRM() {
 
 
 
-      {/* Selected Lead Modal - Central de Inteligência */}
-
       {selectedLead && (
-
-<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }} onClick={() => setSelectedLead(null)}>
-
-            <div style={{ width: '100%', maxWidth: '1000px', height: '85vh', background: 'white', borderRadius: '2.5rem', display: 'flex', boxShadow: '0 40px 100px -20px rgba(0, 0, 0, 0.5)', position: 'relative', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div className="crm-modal-overlay" onClick={() => setSelectedLead(null)}>
+          <div className="crm-modal-container" onClick={(e) => e.stopPropagation()}>
 
                <style>{`@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.98) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }`}</style>
 
-               
+               {/* Abas do Modal no Mobile */}
+               <div className="crm-modal-mobile-tabs">
+                 <button 
+                   className={`crm-modal-tab-btn ${activeModalTab === 'chat' ? 'active' : ''}`}
+                   onClick={() => setActiveModalTab('chat')}
+                 >
+                   Conversa
+                 </button>
+                 <button 
+                   className={`crm-modal-tab-btn ${activeModalTab === 'info' ? 'active' : ''}`}
+                   onClick={() => setActiveModalTab('info')}
+                 >
+                   Dados do Lead
+                 </button>
+               </div>
 
                {/* Coluna Esquerda: Detalhes e Inteligência */}
-
-               <div style={{ width: '380px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', padding: '2rem', overflowY: 'auto' }}>
+               <div className={`crm-modal-left ${activeModalTab === 'info' ? 'show-mobile' : 'hide-mobile'}`}>
 
                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
 
@@ -1435,8 +1583,7 @@ function CRM() {
 
 
                {/* Coluna Direita: Histórico de Conversa (Chat) */}
-
-               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'white' }}>
+               <div className={`crm-modal-right ${activeModalTab === 'chat' ? 'show-mobile' : 'hide-mobile'}`}>
 
                    <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
