@@ -719,7 +719,7 @@ function Settings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
               {bms.length === 0 && <span style={{fontSize: '0.8rem', color: '#888'}}>Nenhuma contingência conectada ainda.</span>}
               {bms.map((bm, i) => (
-                <div key={i} style={{ 
+                <div key={i} className="settings-card-flex" style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center', 
@@ -799,7 +799,7 @@ function Settings() {
               Conecte seu PDV para permitir que a Inteligência O2O processe offline sales e devolva as conversões via CAPI para os relatórios e a Meta.
             </p>
 
-            <div style={{ 
+            <div className="settings-card-flex" style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center', 
@@ -863,7 +863,7 @@ function Settings() {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* WhatsApp Evolution Card */}
-              <div style={{ 
+              <div className="settings-card-flex" style={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
@@ -924,7 +924,7 @@ function Settings() {
               {[
                 { label: "Google Ads API", status: "Desconectado", icon: "ads_click" }
               ].map((item, i) => (
-                <div key={i} style={{ 
+                <div key={i} className="settings-card-flex" style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center', 
@@ -972,7 +972,7 @@ function Settings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {team.length === 0 && <span style={{ color: '#888', fontSize: '0.8rem' }}>Nenhum membro cadastrado além de você.</span>}
               {team.map((member, i) => (
-                <div key={i} style={{ 
+                <div key={i} className="settings-card-flex" style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center', 
@@ -1131,7 +1131,7 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                   </p>
 
                   <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'var(--goals-grid, 2fr 1fr 1fr 1fr auto)', gap: '1rem', alignItems: 'flex-end' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>NOME DA META</label>
                         <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="Ex: Lucro em 7 dias" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
@@ -1247,7 +1247,7 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
               </div>
 
               {/* Seção do Modelo e Voz */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'var(--main-grid, 1fr 1fr 1fr)', gap: '1.5rem' }}>
                 <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
@@ -1415,7 +1415,7 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
         marginTop: '2rem' 
       }}>
         <aside style={{ overflowX: 'auto' }} className="hide-scrollbar">
-          <nav style={{ 
+          <nav className="settings-nav" style={{ 
             display: 'flex', 
             flexDirection: 'var(--settings-nav-dir, column)', 
             gap: '0.5rem',

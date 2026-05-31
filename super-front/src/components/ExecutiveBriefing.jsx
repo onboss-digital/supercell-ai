@@ -3,15 +3,7 @@ import React from 'react';
 const ExecutiveBriefing = ({ insight, loading }) => {
   if (loading) {
     return (
-      <div style={{
-        padding: '2rem',
-        background: 'rgba(255, 255, 255, 0.05)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '1.5rem',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        marginBottom: '2.5rem',
-        animation: 'pulse 2s infinite ease-in-out'
-      }}>
+      <div className="jarvis-briefing-card" style={{ animation: 'pulse 2s infinite ease-in-out' }}>
         <div style={{ height: '24px', width: '200px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '1rem' }}></div>
         <div style={{ height: '16px', width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '0.5rem' }}></div>
         <div style={{ height: '16px', width: '80%', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}></div>
@@ -20,6 +12,9 @@ const ExecutiveBriefing = ({ insight, loading }) => {
   }
 
   if (!insight) return null;
+
+  const hasFala = insight.content && insight.content.includes('[FALA]');
+  const cleanText = insight.content ? insight.content.replace(/\[FALA\]\s*/g, '') : '';
 
   // Função para destacar palavras-chave e métricas com cores
   const renderHighlightedText = (text) => {
@@ -80,14 +75,9 @@ const ExecutiveBriefing = ({ insight, loading }) => {
 
       if (icon) {
         return (
-          <div key={i} style={{ 
-            display: 'flex', gap: '0.8rem', 
-            background: 'rgba(255,255,255,0.03)',
-            padding: '1rem', borderRadius: '0.75rem',
-            marginBottom: '1rem', borderLeft: `4px solid ${color}`
-          }}>
+          <div key={i} className="jarvis-alert-item" style={{ '--border-color': color }}>
             <span className="material-icons-outlined" style={{ color, fontSize: '1.2rem' }}>{icon}</span>
-            <div style={{ flex: 1, color: '#fff', fontSize: '0.95rem' }}>
+            <div className="jarvis-alert-text">
               {renderHighlightedText(trimmed.replace(/[🔴🟢]|report_problem|check_circle/g, ''))}
             </div>
           </div>
@@ -95,10 +85,7 @@ const ExecutiveBriefing = ({ insight, loading }) => {
       }
 
       return (
-        <p key={i} style={{ 
-          marginBottom: '1.2rem', color: '#F1F5F9', 
-          lineHeight: '1.7', fontSize: '1rem', opacity: 0.9 
-        }}>
+        <p key={i} className="jarvis-voice-paragraph" style={{ opacity: 0.9 }}>
           {renderHighlightedText(line)}
         </p>
       );
@@ -106,55 +93,39 @@ const ExecutiveBriefing = ({ insight, loading }) => {
   };
 
   return (
-    <div style={{
-      padding: '2.5rem',
-      background: '#1e293b', // Fundo sólido para garantir visibilidade
-      borderRadius: '1.5rem',
-      border: '1px solid #38bdf8',
-      boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
-      marginBottom: '3rem',
-      color: 'white'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginBottom: '2rem' }}>
-        <div style={{ 
-          width: '56px', height: '56px', borderRadius: '16px', 
-          background: '#0EA5E9', 
-          display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          color: 'white'
-        }}>
+    <div className="jarvis-briefing-card">
+      <div className="jarvis-briefing-header" style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginBottom: '2rem' }}>
+        <div className="jarvis-ai-avatar jarvis-ai-pulse">
           <span className="material-icons-outlined" style={{ fontSize: '2.2rem' }}>psychology</span>
         </div>
         <div>
-          <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: 'white', margin: 0 }}>
+          <h3 className="jarvis-briefing-title" style={{ fontSize: '1.4rem', fontWeight: '900', color: 'white', margin: 0 }}>
             Executive Briefing by J.A.R.V.I.S.
           </h3>
-          <span style={{ fontSize: '0.85rem', color: '#38BDF8', fontWeight: '700' }}>
+          <span className="jarvis-briefing-date" style={{ fontSize: '0.85rem', color: '#38BDF8', fontWeight: '700' }}>
             RELATÓRIO ESTRATÉGICO DE {new Date(insight.date).toLocaleDateString('pt-BR')}
           </span>
         </div>
       </div>
 
-      <div style={{ 
-        fontSize: '1.1rem', 
-        color: '#ffffff', // Branco Puro
-        background: 'rgba(0,0,0,0.2)', // Fundo leve para o texto
-        padding: '1.5rem',
-        borderRadius: '1rem',
-        lineHeight: '1.8'
-      }}>
-        {formatContent(insight.content)}
+      <div className="jarvis-briefing-content">
+        {hasFala ? (
+          <div className="jarvis-voice-bubble">
+            <div className="jarvis-voice-header">
+              <span className="material-icons-outlined jarvis-voice-icon">graphic_eq</span>
+              <span>Mensagem de Voz do J.A.R.V.I.S.</span>
+            </div>
+            <div className="jarvis-voice-text">
+              {formatContent(cleanText)}
+            </div>
+          </div>
+        ) : (
+          formatContent(cleanText)
+        )}
       </div>
 
-      <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-        <button style={{
-          background: '#0ea5e9',
-          color: 'white',
-          border: 'none',
-          padding: '0.8rem 1.5rem',
-          borderRadius: '0.75rem',
-          fontWeight: '800',
-          cursor: 'pointer'
-        }}>
+      <div className="jarvis-footer-container" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <button className="jarvis-action-button">
           Discutir Estratégia no Chat
         </button>
       </div>

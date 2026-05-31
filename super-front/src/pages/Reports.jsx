@@ -40,6 +40,7 @@ function Reports() {
 
   const [systemState, setSystemState] = useState("SIS.ONLINE"); // SIS.AGUARDA, USER.RECV, SIS.RESP
   const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [isMobileChatExpanded, setIsMobileChatExpanded] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
   const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   
@@ -765,227 +766,379 @@ function Reports() {
         }
       `}</style>
       
-        <div className="dark flex flex-col font-code-sm text-on-surface relative overflow-hidden h-full w-full" 
-             style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-primary)' }}>
-          
-          {/* Global Header */}
-          <header className="flex justify-between items-center px-6 h-12 shrink-0 bg-surface border-b border-primary/20 z-10 relative">
-            <div className="w-16"></div>
-            <div className="text-primary font-label-caps tracking-[0.3em] text-[11px]" style={{ textShadow: '0 0 8px var(--color-primary-container)' }}>
-              J.A.R.V.I.S.
-            </div>
-          <div className="flex gap-4 text-primary/60">
-            <span 
-              className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors"
-              onClick={() => setIsChatExpanded(!isChatExpanded)}
-              title={isChatExpanded ? "Restaurar Visualizador" : "Expandir Terminal"}
-            >
-              {isChatExpanded ? 'close_fullscreen' : 'open_in_full'}
-            </span>
-            <span className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors">settings</span>
-            <span 
-              className="material-icons-outlined text-[16px] cursor-pointer hover:text-red-400 transition-colors"
-              onClick={deleteHistory}
-              title="Reiniciar J.A.R.V.I.S. (Limpar Histórico)"
-            >
-              restart_alt
-            </span>
-            <span 
-              className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors"
-              onClick={() => setIsHistoryOpen(true)}
-              title="Histórico de Conversas"
-            >
-              history
-            </span>
-          </div>
-        </header>
-
-        {/* Histórico Sidebar */}
-        {isHistoryOpen && (
-          <div className="absolute top-0 right-0 w-80 h-full bg-[#060a0f]/95 border-l border-primary/20 z-50 flex flex-col backdrop-blur-md transition-all shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
-            <div className="p-4 border-b border-primary/20 flex justify-between items-center">
-              <h3 className="text-primary font-label-caps tracking-widest text-[11px]">SYS.HISTORY</h3>
-              <span className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary" onClick={() => setIsHistoryOpen(false)}>close</span>
-            </div>
+        {/* Interface Exclusiva para Desktop */}
+        <div className="desktop-only h-full w-full">
+          <div className="dark flex flex-col font-code-sm text-on-surface relative overflow-hidden h-full w-full" 
+               style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-primary)' }}>
             
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 term-scroll">
-              <button 
-                onClick={deleteHistory}
-                className="w-full py-2 bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors font-label-caps tracking-widest text-[10px]"
-              >
-                EXPURGAR TODO HISTÓRICO
-              </button>
-              
-              <div className="flex flex-col gap-2 mt-4">
-                <p className="text-primary/40 text-[9px] text-center px-4">
-                  O Jarvis agora possui Memória Permanente. Todas as suas conversas estratégicas estão gravadas no núcleo central para consulta futura.
-                </p>
+            {/* Global Header */}
+            <header className="flex justify-between items-center px-6 h-12 shrink-0 bg-surface border-b border-primary/20 z-10 relative">
+              <div className="w-16"></div>
+              <div className="text-primary font-label-caps tracking-[0.3em] text-[11px]" style={{ textShadow: '0 0 8px var(--color-primary-container)' }}>
+                J.A.R.V.I.S.
               </div>
-            </div>
-          </div>
-        )}
+              <div className="flex gap-4 text-primary/60">
+                <span 
+                  className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors"
+                  onClick={() => setIsChatExpanded(!isChatExpanded)}
+                  title={isChatExpanded ? "Restaurar Visualizador" : "Expandir Terminal"}
+                >
+                  {isChatExpanded ? 'close_fullscreen' : 'open_in_full'}
+                </span>
+                <span className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors">settings</span>
+                <span 
+                  className="material-icons-outlined text-[16px] cursor-pointer hover:text-red-400 transition-colors"
+                  onClick={deleteHistory}
+                  title="Reiniciar J.A.R.V.I.S. (Limpar Histórico)"
+                >
+                  restart_alt
+                </span>
+                <span 
+                  className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary transition-colors"
+                  onClick={() => setIsHistoryOpen(true)}
+                  title="Histórico de Conversas"
+                >
+                  history
+                </span>
+              </div>
+            </header>
 
-        {/* Top HUD Section */}
-        {!isChatExpanded && (
-          <div className="relative flex-none flex flex-col items-center justify-center md:min-h-[380px] min-h-[190px] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
-          
-          {/* Data Greebles Left */}
-          <div className="absolute top-6 left-6 text-primary/40 text-[10px] leading-tight tracking-widest hidden sm:block">
-            &gt; PRT_88.192.A<br/>
-            &gt; NET_SEC: OPTIMAL<br/>
-            &gt; PWR_GRID: STABLE
-          </div>
-          
-          {/* Data Greebles Right */}
-          <div className="absolute top-6 right-6 text-primary/40 text-[10px] leading-tight text-right tracking-widest hidden sm:block">
-            MEM: 4096TB<br/>
-            LOAD: 0.04%<br/>
-            SYNC: TRUE
-          </div>
-
-          {/* Center Visualizer HUD */}
-          <div className="relative flex items-center justify-center w-80 h-80 mt-4 mb-8 md:scale-100 scale-[0.55] origin-center">
-            
-            {/* Background Atmosphere (Aura) */}
-            <div className="absolute w-64 h-64 bg-primary/5 rounded-full blur-[60px] animate-pulse"></div>
-
-            {/* Concentric Circles */}
-            <div className="absolute w-40 h-40 border border-primary/20 rounded-full animate-pulse"></div>
-            <div className="absolute w-56 h-56 border border-primary/10 rounded-full border-dashed animate-[spin_20s_linear_infinite]"></div>
-
-            {/* Active Visualizer or Status Text */}
-            <div className="relative z-10 flex items-center justify-center">
-              {systemState === "SIS.AGUARDA" ? (
-                <div className="relative flex items-center justify-center w-72 h-72">
-                  {/* Camadas de Energia do Núcleo (HIPER-ATIVO) */}
-                  <div className="absolute inset-4 border-2 border-primary/20 rounded-full animate-[pulse_2s_easeInOut_infinite] scale-95 shadow-[0_0_50px_rgba(76,214,251,0.2)]"></div>
-                  <div className="absolute inset-8 border border-primary/40 rounded-full animate-[spin_8s_linear_infinite] border-dashed"></div>
-                  <div className="absolute inset-12 border-2 border-primary/50 rounded-full animate-[pulse_1.5s_easeInOut_infinite] shadow-[inset_0_0_40px_rgba(76,214,251,0.3)]"></div>
+            {/* Histórico Sidebar */}
+            {isHistoryOpen && (
+              <div className="absolute top-0 right-0 w-80 h-full bg-[#060a0f]/95 border-l border-primary/20 z-50 flex flex-col backdrop-blur-md transition-all shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+                <div className="p-4 border-b border-primary/20 flex justify-between items-center">
+                  <h3 className="text-primary font-label-caps tracking-widest text-[11px]">SYS.HISTORY</h3>
+                  <span className="material-icons-outlined text-[16px] cursor-pointer hover:text-primary" onClick={() => setIsHistoryOpen(false)}>close</span>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 term-scroll">
+                  <button 
+                    onClick={deleteHistory}
+                    className="w-full py-2 bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors font-label-caps tracking-widest text-[10px]"
+                  >
+                    EXPURGAR TODO HISTÓRICO
+                  </button>
                   
-                  {/* Aura Central de Plasma Intensa */}
-                  <div className="absolute w-24 h-24 bg-primary/20 rounded-full blur-2xl animate-pulse"></div>
-                  <div className="absolute w-20 h-20 border-2 border-primary rounded-full shadow-[0_0_40px_var(--color-primary)] animate-[flicker_2s_infinite]"></div>
-
-                  {/* Nome JARVIS Holográfico */}
-                  <div className="relative z-20 flex flex-col items-center">
-                    <span className="text-primary font-label-caps text-3xl tracking-[0.25em] font-black italic animate-[flicker_3s_infinite]" 
-                          style={{ textShadow: '0 0 15px var(--color-primary), 0 0 40px var(--color-primary)' }}>
-                      JARVIS
-                    </span>
-                    <div className="w-16 h-[2px] bg-primary/60 mt-2 shadow-[0_0_10px_var(--color-primary)] animate-pulse"></div>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <p className="text-primary/40 text-[9px] text-center px-4">
+                      O Jarvis agora possui Memória Permanente. Todas as suas conversas estratégicas estão gravadas no núcleo central para consulta futura.
+                    </p>
                   </div>
+                </div>
+              </div>
+            )}
 
-                  {/* Enxame de Partículas (Mais partículas e movimento) */}
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className={`absolute w-full h-full border border-primary/5 rounded-full animate-[spin_${(i+1)*4}s_linear_infinite]`}
-                         style={{ transform: `rotate(${i * 60}deg) scale(${1 + i*0.05})` }}>
-                      <div className="absolute top-0 left-1/2 w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]"></div>
+            {/* Top HUD Section */}
+            {!isChatExpanded && (
+              <div className="relative flex-none flex flex-col items-center justify-center md:min-h-[380px] min-h-[190px] bg-[#060a0f] overflow-hidden border-b border-primary/10 transition-all duration-300">
+              
+              {/* Data Greebles Left */}
+              <div className="absolute top-6 left-6 text-primary/40 text-[10px] leading-tight tracking-widest hidden sm:block">
+                &gt; PRT_88.192.A<br/>
+                &gt; NET_SEC: OPTIMAL<br/>
+                &gt; PWR_GRID: STABLE
+              </div>
+              
+              {/* Data Greebles Right */}
+              <div className="absolute top-6 right-6 text-primary/40 text-[10px] leading-tight text-right tracking-widest hidden sm:block">
+                MEM: 4096TB<br/>
+                LOAD: 0.04%<br/>
+                SYNC: TRUE
+              </div>
+
+              {/* Center Visualizer HUD */}
+              <div className="relative flex items-center justify-center w-80 h-80 mt-4 mb-8 md:scale-100 scale-[0.55] origin-center">
+                
+                {/* Background Atmosphere (Aura) */}
+                <div className="absolute w-64 h-64 bg-primary/5 rounded-full blur-[60px] animate-pulse"></div>
+
+                {/* Concentric Circles */}
+                <div className="absolute w-40 h-40 border border-primary/20 rounded-full animate-pulse"></div>
+                <div className="absolute w-56 h-56 border border-primary/10 rounded-full border-dashed animate-[spin_20s_linear_infinite]"></div>
+
+                {/* Active Visualizer or Status Text */}
+                <div className="relative z-10 flex items-center justify-center">
+                  {systemState === "SIS.AGUARDA" ? (
+                    <div className="relative flex items-center justify-center w-72 h-72">
+                      {/* Camadas de Energia do Núcleo (HIPER-ATIVO) */}
+                      <div className="absolute inset-4 border-2 border-primary/20 rounded-full animate-[pulse_2s_easeInOut_infinite] scale-95 shadow-[0_0_50px_rgba(76,214,251,0.2)]"></div>
+                      <div className="absolute inset-8 border border-primary/40 rounded-full animate-[spin_8s_linear_infinite] border-dashed"></div>
+                      <div className="absolute inset-12 border-2 border-primary/50 rounded-full animate-[pulse_1.5s_easeInOut_infinite] shadow-[inset_0_0_40px_rgba(76,214,251,0.3)]"></div>
+                      
+                      {/* Aura Central de Plasma Intensa */}
+                      <div className="absolute w-24 h-24 bg-primary/20 rounded-full blur-2xl animate-pulse"></div>
+                      <div className="absolute w-20 h-20 border-2 border-primary rounded-full shadow-[0_0_40px_var(--color-primary)] animate-[flicker_2s_infinite]"></div>
+
+                      {/* Nome JARVIS Holográfico */}
+                      <div className="relative z-20 flex flex-col items-center">
+                        <span className="text-primary font-label-caps text-3xl tracking-[0.25em] font-black italic animate-[flicker_3s_infinite]" 
+                              style={{ textShadow: '0 0 15px var(--color-primary), 0 0 40px var(--color-primary)' }}>
+                          JARVIS
+                        </span>
+                        <div className="w-16 h-[2px] bg-primary/60 mt-2 shadow-[0_0_10px_var(--color-primary)] animate-pulse"></div>
+                      </div>
+
+                      {/* Enxame de Partículas */}
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className={`absolute w-full h-full border border-primary/5 rounded-full animate-[spin_${(i+1)*4}s_linear_infinite]`}
+                             style={{ transform: `rotate(${i * 60}deg) scale(${1 + i*0.05})` }}>
+                          <div className="absolute top-0 left-1/2 w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]"></div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="flex items-center gap-1 h-20">
+                      {renderSpectrumBars()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Labels de Estado HUD Premium */}
+              <div className="w-full flex items-center justify-center z-20 mb-6 px-4">
+                <div className="flex items-center gap-3 px-6 py-2 bg-black/60 backdrop-blur-md border border-primary/40 rounded-full shadow-[0_0_20px_rgba(76,214,251,0.2)] animate-[pulse_2s_infinite]">
+                  <div className="relative flex items-center justify-center shrink-0">
+                    <div className={`w-3 h-3 rounded-full ${systemState === 'SIS.AGUARDA' ? 'bg-green-400 shadow-[0_0_12px_#4ade80]' : 'bg-primary shadow-[0_0_12px_#4cd6fb]'} animate-pulse`}></div>
+                    <div className={`absolute w-5 h-5 rounded-full border border-current ${systemState === 'SIS.AGUARDA' ? 'text-green-400/50' : 'text-primary/50'} animate-ping`}></div>
+                  </div>
+                  <span className="text-primary font-label-caps tracking-[0.2em] text-[10px] sm:text-[12px] font-bold text-center" style={{ textShadow: '0 0 10px rgba(76, 214, 251, 0.5)' }}>
+                    {
+                      systemState === "USER.RECV" ? "CAPTURANDO ÁUDIO: ESCUTANDO SENHOR..." :
+                      systemState === "SIS.PROC" ? "PROCESSANDO DADOS ESTRATÉGICOS..." :
+                      systemState === "SIS.RESP" ? "JARVIS EMITINDO DIAGNÓSTICO..." :
+                      systemState === "SIS.AGUARDA" ? "ESTOU PRONTO PARA OUVI-LO, SENHOR!" :
+                      "SINCRONIZANDO NÚCLEO CENTRAL.DLL"
+                    }
+                  </span>
+                </div>
+              </div>
+              
+            </div>
+            )}
+
+            {/* Divider */}
+            <div className="w-full flex items-center justify-between px-4 py-1 bg-primary/5 border-b border-primary/20 shrink-0">
+              <span className={`font-label-caps tracking-widest text-[9px] ${metaStatus.ok ? 'text-[#4ade80]' : 'text-[#f87171] animate-pulse'}`}>
+                STATUS: {metaStatus.msg}
+              </span>
+              <div className="flex-1 border-t border-primary/10 mx-4"></div>
+              <span className="text-primary/60 font-label-caps tracking-widest text-[9px]">v.4.2.0</span>
+            </div>
+
+            {/* Bottom Chat / Terminal Section */}
+            <div className="flex-1 bg-background overflow-y-auto p-6 term-scroll flex flex-col gap-6 relative" style={{ minHeight: '40%', backgroundColor: 'var(--color-background)' }}>
+              {messages.map((msg, index) => (
+                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
+                  <div className={`max-w-[70%] ${msg.role === 'user' ? 'border-r-2 border-amber-500/50 pr-4 text-right' : 'border-l-2 border-primary/30 pl-4 text-left'}`}>
+                    <div className={`text-[13px] leading-relaxed mb-1 ${msg.role === 'user' ? 'text-amber-400' : 'text-primary/70'}`}
+                         style={msg.role === 'user' ? { textShadow: '0 0 8px rgba(251,191,36,0.3)' } : {}}>
+                      {msg.role === 'jarvis' ? <TypewriterText text={msg.content} animate={msg.animate !== false} /> : msg.content}
+                    </div>
+                    <div className={`text-[9px] uppercase tracking-widest ${msg.role === 'user' ? 'text-amber-500/50' : 'text-primary/30'}`}>
+                      &gt; {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESP'} [{msg.time}]
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              <div className="flex items-center mt-2 opacity-80">
+                <span className="text-primary font-code-sm">&gt;</span>
+                <span className="w-2 h-3.5 bg-primary ml-2 animate-pulse"></span>
+              </div>
+
+              <div ref={messagesEndRef}></div>
+            </div>
+
+            {/* Input Bar */}
+            <div className="shrink-0 bg-surface border-t border-primary/20 p-2 sm:p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+              <form onSubmit={handleSendText} className="flex items-center gap-3 w-full bg-background border border-primary/20 p-1 pr-2 rounded-sm focus-within:border-primary/50 transition-colors" style={{ backgroundColor: 'var(--color-background)' }}>
+                
+                <div className="text-primary/40 pl-3">
+                  <span className="material-icons-outlined text-[16px]">terminal</span>
+                </div>
+                
+                <input 
+                  type="text" 
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Fale comigo, senhor."
+                  className="flex-1 bg-transparent border-none text-primary/80 font-code-sm text-[12px] px-2 py-2 focus:outline-none focus:ring-0 placeholder:text-primary/30"
+                  autoComplete="off"
+                />
+                
+                <button 
+                  type="button"
+                  onClick={toggleRecording}
+                  className={`w-12 h-12 flex items-center justify-center transition-all border cursor-pointer ${isRecording ? 'border-red-500/50 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/60 hover:shadow-[0_0_12px_rgba(76,214,251,0.3)]'}`}
+                  title="Comando de Voz"
+                >
+                  <span className="material-icons-outlined text-[20px]">
+                    {isRecording ? 'mic_off' : 'mic'}
+                  </span>
+                </button>
+
+                <button 
+                  type="submit"
+                  className="w-12 h-12 flex items-center justify-center transition-all border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/60 hover:shadow-[0_0_12px_rgba(76,214,251,0.3)] cursor-pointer"
+                  title="Enviar Texto"
+                >
+                  <span className="material-icons-outlined text-[20px]">send</span>
+                </button>
+
+              </form>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Interface Exclusiva para Mobile */}
+        <div className="mobile-only reports-mobile-layout">
+          <div className="jarvis-mobile-wrapper">
+            {/* Header Móvel */}
+            <header className="flex justify-between items-center px-4 h-12 shrink-0 bg-surface border-b border-primary/20 z-10 relative">
+              <div className="text-primary font-label-caps tracking-[0.25em] text-[12px] font-bold" style={{ textShadow: '0 0 8px var(--color-primary-container)' }}>
+                J.A.R.V.I.S.
+              </div>
+              <div className="flex gap-4 text-primary/60">
+                <span 
+                  className="material-icons-outlined text-[18px] cursor-pointer hover:text-red-400"
+                  onClick={deleteHistory}
+                  title="Reiniciar Jarvis"
+                >
+                  restart_alt
+                </span>
+                <span 
+                  className="material-icons-outlined text-[18px] cursor-pointer hover:text-primary"
+                  onClick={() => setIsHistoryOpen(true)}
+                  title="Histórico"
+                >
+                  history
+                </span>
+              </div>
+            </header>
+
+            {/* Núcleo Holográfico (Encolhe quando expande o chat) */}
+            <div className={`jarvis-mobile-core-container ${isMobileChatExpanded ? 'collapsed' : ''}`}>
+              {/* Esfera 3D Animada */}
+              <div className="jarvis-sphere-outer">
+                <div className="jarvis-sphere-glow"></div>
+                <div className="jarvis-sphere-ring jarvis-sphere-ring-1" style={systemState === 'SIS.PROC' ? { animationDuration: '3s' } : systemState === 'USER.RECV' ? { animationDuration: '4s' } : {}}></div>
+                <div className="jarvis-sphere-ring jarvis-sphere-ring-2" style={systemState === 'SIS.PROC' ? { animationDuration: '4s' } : systemState === 'USER.RECV' ? { animationDuration: '5s' } : {}}></div>
+                <div className="jarvis-sphere-ring jarvis-sphere-ring-3" style={systemState === 'SIS.PROC' ? { animationDuration: '5s' } : systemState === 'USER.RECV' ? { animationDuration: '6s' } : {}}></div>
+                <div className="jarvis-sphere-center" style={systemState === 'SYS.RESP' ? { animation: 'pulseSphere 1s ease-in-out infinite' } : {}}>
+                  <span>JARVIS</span>
+                </div>
+              </div>
+
+              {/* Status Pill */}
+              <div className="jarvis-mobile-status-pill">
+                <div className="relative flex items-center justify-center shrink-0">
+                  <div className={`w-2.5 h-2.5 rounded-full ${systemState === 'SIS.AGUARDA' ? 'bg-green-400 shadow-[0_0_10px_#4ade80]' : 'bg-primary shadow-[0_0_10px_#4cd6fb]'} animate-pulse`}></div>
+                  <div className={`absolute w-4 h-4 rounded-full border border-current ${systemState === 'SIS.AGUARDA' ? 'text-green-400/30' : 'text-primary/30'} animate-ping`}></div>
+                </div>
+                <span className="text-primary font-label-caps tracking-[0.15em] text-[9px] font-bold">
+                  {
+                    systemState === "USER.RECV" ? "ESCUTANDO..." :
+                    systemState === "SIS.PROC" ? "PROCESSANDO..." :
+                    systemState === "SIS.RESP" ? "RESPONDENDO..." :
+                    "NÚCLEO ONLINE"
+                  }
+                </span>
+              </div>
+
+              {/* Último Insight do Jarvis ou Balão de Mensagem */}
+              {messages.length > 0 ? (
+                <div className="jarvis-last-message-bubble">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {messages[messages.length - 1].content.replace(/\[FALA\]/gi, '').replace(/\[TELA\][\s\S]*/gi, '').replace(/\[TRANSICAO\][\s\S]*/gi, '')}
+                  </ReactMarkdown>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 h-20">
-                  {renderSpectrumBars()}
+                <div className="jarvis-last-message-bubble">
+                  <span>Sistemas operacionais, senhor. O que deseja analisar hoje?</span>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Labels de Estado HUD Premium - AGORA NO FLUXO NORMAL (FLEX-COL) */}
-          <div className="w-full flex items-center justify-center z-20 mb-6 px-4">
-            <div className="flex items-center gap-3 px-6 py-2 bg-black/60 backdrop-blur-md border border-primary/40 rounded-full shadow-[0_0_20px_rgba(76,214,251,0.2)] animate-[pulse_2s_infinite]">
-              <div className="relative flex items-center justify-center shrink-0">
-                <div className={`w-3 h-3 rounded-full ${systemState === 'SIS.AGUARDA' ? 'bg-green-400 shadow-[0_0_12px_#4ade80]' : 'bg-primary shadow-[0_0_12px_#4cd6fb]'} animate-pulse`}></div>
-                <div className={`absolute w-5 h-5 rounded-full border border-current ${systemState === 'SIS.AGUARDA' ? 'text-green-400/50' : 'text-primary/50'} animate-ping`}></div>
+            {/* Gaveta de Chat Deslizante */}
+            <div className={`jarvis-mobile-chat-container ${isMobileChatExpanded ? 'expanded' : ''}`}>
+              <div className="jarvis-mobile-chat-header">
+                <h3>SYS.CONVERSA_LOG</h3>
+                <span 
+                  className="material-icons-outlined text-[20px] text-primary/70 cursor-pointer"
+                  onClick={() => setIsMobileChatExpanded(false)}
+                >
+                  expand_more
+                </span>
               </div>
-              <span className="text-primary font-label-caps tracking-[0.2em] text-[10px] sm:text-[12px] font-bold text-center" style={{ textShadow: '0 0 10px rgba(76, 214, 251, 0.5)' }}>
-                {
-                  systemState === "USER.RECV" ? "CAPTURANDO ÁUDIO: ESCUTANDO SENHOR..." :
-                  systemState === "SIS.PROC" ? "PROCESSANDO DADOS ESTRATÉGICOS..." :
-                  systemState === "SIS.RESP" ? "JARVIS EMITINDO DIAGNÓSTICO..." :
-                  systemState === "SIS.AGUARDA" ? "ESTOU PRONTO PARA OUVI-LO, SENHOR!" :
-                  "SINCRONIZANDO NÚCLEO CENTRAL.DLL"
-                }
-              </span>
-            </div>
-          </div>
-          
-        </div>
-        )}
-
-        {/* Divider */}
-        <div className="w-full flex items-center justify-between px-4 py-1 bg-primary/5 border-b border-primary/20 shrink-0">
-          <span className={`font-label-caps tracking-widest text-[9px] ${metaStatus.ok ? 'text-[#4ade80]' : 'text-[#f87171] animate-pulse'}`}>
-            STATUS: {metaStatus.msg}
-          </span>
-          <div className="flex-1 border-t border-primary/10 mx-4"></div>
-          <span className="text-primary/60 font-label-caps tracking-widest text-[9px]">v.4.2.0</span>
-        </div>
-
-        {/* Bottom Chat / Terminal Section */}
-        <div className="flex-1 bg-background overflow-y-auto p-6 term-scroll flex flex-col gap-6 relative" style={{ minHeight: '40%', backgroundColor: 'var(--color-background)' }}>
-          {messages.map((msg, index) => (
-            <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
-              <div className={`max-w-[70%] ${msg.role === 'user' ? 'border-r-2 border-amber-500/50 pr-4 text-right' : 'border-l-2 border-primary/30 pl-4 text-left'}`}>
-                <div className={`text-[13px] leading-relaxed mb-1 ${msg.role === 'user' ? 'text-amber-400' : 'text-primary/70'}`}
-                     style={msg.role === 'user' ? { textShadow: '0 0 8px rgba(251,191,36,0.3)' } : {}}>
-                  {msg.role === 'jarvis' ? <TypewriterText text={msg.content} animate={msg.animate !== false} /> : msg.content}
-                </div>
-                <div className={`text-[9px] uppercase tracking-widest ${msg.role === 'user' ? 'text-amber-500/50' : 'text-primary/30'}`}>
-                  &gt; {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESP'} [{msg.time}]
-                </div>
+              <div className="jarvis-mobile-chat-scroll term-scroll">
+                {messages.map((msg, index) => (
+                  <div key={index} className={`jarvis-bubble-row ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
+                    <div className={`jarvis-chat-bubble ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content.replace(/\[FALA\]/gi, '').replace(/\[TELA\][\s\S]*/gi, '').replace(/\[TRANSICAO\][\s\S]*/gi, '')}
+                      </ReactMarkdown>
+                      <span className={`jarvis-bubble-time ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
+                        {msg.time.split(' às ')[1] || msg.time}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {messages.length === 0 && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-primary/40 text-[11px] gap-2 py-8">
+                    <span className="material-icons-outlined text-[24px]">chat_bubble_outline</span>
+                    <p>Sem histórico de conversas nesta sessão</p>
+                  </div>
+                )}
+                <div ref={messagesEndRef}></div>
               </div>
             </div>
-          ))}
-          
-          <div className="flex items-center mt-2 opacity-80">
-            <span className="text-primary font-code-sm">&gt;</span>
-            <span className="w-2 h-3.5 bg-primary ml-2 animate-pulse"></span>
-          </div>
 
-          <div ref={messagesEndRef}></div>
-        </div>
+            {/* Barra de Entrada Móvel */}
+            <div className="jarvis-mobile-input-bar">
+              <form onSubmit={handleSendText}>
+                <button 
+                  type="button"
+                  onClick={() => setIsMobileChatExpanded(!isMobileChatExpanded)}
+                  className="jarvis-mobile-btn jarvis-mobile-btn-mic"
+                  style={{ marginRight: '0.5rem', background: isMobileChatExpanded ? 'rgba(0, 245, 255, 0.15)' : 'transparent' }}
+                  title="Expandir Histórico"
+                >
+                  <span className="material-icons-outlined">
+                    {isMobileChatExpanded ? 'visibility' : 'forum'}
+                  </span>
+                </button>
 
-        {/* Input Bar */}
-        <div className="shrink-0 bg-surface border-t border-primary/20 p-2 sm:p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
-          <form onSubmit={handleSendText} className="flex items-center gap-3 w-full bg-background border border-primary/20 p-1 pr-2 rounded-sm focus-within:border-primary/50 transition-colors" style={{ backgroundColor: 'var(--color-background)' }}>
-            
-            <div className="text-primary/40 pl-3">
-              <span className="material-icons-outlined text-[16px]">terminal</span>
+                <input 
+                  type="text" 
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Fale comigo, senhor..."
+                  autoComplete="off"
+                />
+
+                <button 
+                  type="button"
+                  onClick={toggleRecording}
+                  className={`jarvis-mobile-btn jarvis-mobile-btn-mic ${isRecording ? 'recording' : ''}`}
+                  title="Comando de Voz"
+                >
+                  <span className="material-icons-outlined">
+                    {isRecording ? 'mic_off' : 'mic'}
+                  </span>
+                </button>
+
+                <button 
+                  type="submit"
+                  className="jarvis-mobile-btn jarvis-mobile-btn-send"
+                  title="Enviar"
+                >
+                  <span className="material-icons-outlined">send</span>
+                </button>
+              </form>
             </div>
-            
-            <input 
-              type="text" 
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Fale comigo, senhor."
-              className="flex-1 bg-transparent border-none text-primary/80 font-code-sm text-[12px] px-2 py-2 focus:outline-none focus:ring-0 placeholder:text-primary/30"
-              autoComplete="off"
-            />
-            
-            <button 
-              type="button"
-              onClick={toggleRecording}
-              className={`w-12 h-12 flex items-center justify-center transition-all border cursor-pointer ${isRecording ? 'border-red-500/50 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/60 hover:shadow-[0_0_12px_rgba(76,214,251,0.3)]'}`}
-              title="Comando de Voz"
-            >
-              <span className="material-icons-outlined text-[20px]">
-                {isRecording ? 'mic_off' : 'mic'}
-              </span>
-            </button>
-
-            <button 
-              type="submit"
-              className="w-12 h-12 flex items-center justify-center transition-all border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/60 hover:shadow-[0_0_12px_rgba(76,214,251,0.3)] cursor-pointer"
-              title="Enviar Texto"
-            >
-              <span className="material-icons-outlined text-[20px]">send</span>
-            </button>
-
-          </form>
+          </div>
         </div>
-
-      </div>
       
       {/* MODO CINEMÁTICO (JARVIS PROTOCOL) */}
       {isCinematic && (

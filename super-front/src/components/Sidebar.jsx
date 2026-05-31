@@ -49,14 +49,16 @@ const Sidebar = () => {
 
       {/* Bottom Navigation exclusiva para Mobile */}
       <nav className="bottom-nav mobile-only">
-        {menuItems.slice(0, 5).map((item) => (
+        {menuItems.slice(0, 6).map((item) => (
           <NavLink 
             key={item.id} 
             to={`/${item.id}`} 
             className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}
           >
             <span className="material-icons-outlined">{item.icon}</span>
-            <span style={{ fontSize: '0.65rem', fontWeight: '700' }}>{item.label.split(' ')[0]}</span>
+            <span style={{ fontSize: '0.58rem', fontWeight: '700', letterSpacing: '-0.02em' }}>
+              {item.id === 'reports' ? 'IA' : item.label.split(' ')[0]}
+            </span>
           </NavLink>
         ))}
       </nav>

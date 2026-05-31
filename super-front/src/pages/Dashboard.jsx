@@ -240,7 +240,7 @@ function Dashboard() {
       )}
 
       {/* Filters Bar Superior */}
-      <div className="filters-bar" style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', padding: '1.5rem', background: 'var(--color-surface-container-lowest)', borderRadius: '1rem', border: '1px solid var(--color-surface-container-low)', marginBottom: '2rem' }}>
+      <div className="filters-bar" style={{ padding: '1.5rem', background: 'var(--color-surface-container-lowest)', borderRadius: '1rem', border: '1px solid var(--color-surface-container-low)', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
           <span className="material-icons-outlined" style={{ color: 'var(--color-primary)' }}>date_range</span>
           <select className="filter-select" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ border: 'none', background: 'var(--color-surface-container-low)', padding: '0.6rem 1rem', borderRadius: '0.5rem', fontWeight: '600', outline: 'none', cursor: 'pointer' }}>
@@ -319,7 +319,7 @@ function Dashboard() {
           </select>
         </div>
 
-        <div style={{ marginLeft: 'auto' }}>
+        <div className="filter-btn-container">
           <button 
             onClick={() => setIsSidebarOpen(true)}
             style={{ 
@@ -393,12 +393,7 @@ function Dashboard() {
       </section>
 
       {/* Sidebar UI/UX Exclusiva */}
-      <div style={{
-        position: 'fixed', top: 0, right: isSidebarOpen ? 0 : '-100%', maxWidth: '420px', width: '100%', 
-        height: '100vh', background: 'var(--color-surface-container-lowest)', 
-        boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', transition: 'right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-        zIndex: 1000, display: 'flex', flexDirection: 'column'
-      }}>
+      <div className="dashboard-sidebar" style={{ right: isSidebarOpen ? 0 : '-100%' }}>
         {/* Cabeçalho */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2rem', borderBottom: '1px solid var(--color-surface-container-low)' }}>
           <h3 style={{ margin: 0, fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '1.2rem' }}>

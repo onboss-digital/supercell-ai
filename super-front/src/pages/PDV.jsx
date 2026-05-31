@@ -148,21 +148,16 @@ function PDV() {
   return (
     <main className="main-content">
       <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-      {/* Header com Filtros de Período */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '900', margin: 0 }}>Dashboard de Vendas (PDV)</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Espelhamento em tempo real do MercadoPhone</p>
+      <div className="pdv-header">
+        <div className="pdv-title-section">
+          <h2>Dashboard de Vendas (PDV)</h2>
+          <div className="pdv-subtitle-container">
+            <p>Espelhamento em tempo real do MercadoPhone</p>
             <button 
               onClick={handleSync}
               disabled={syncing}
-              style={{ 
-                background: 'transparent', border: '1px solid #334155', color: '#38bdf8', 
-                padding: '0.2rem 0.6rem', borderRadius: '0.4rem', fontSize: '0.7rem', 
-                fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem',
-                opacity: syncing ? 0.5 : 1
-              }}
+              className="pdv-sync-btn"
+              style={{ opacity: syncing ? 0.5 : 1 }}
             >
               <span className={`material-icons-outlined ${syncing ? 'spin' : ''}`} style={{ fontSize: '0.9rem' }}>sync</span>
               {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR AGORA'}
@@ -171,45 +166,45 @@ function PDV() {
         </div>
 
         {/* BARRA DE FILTROS */}
-        <div style={{ display: 'flex', alignItems: 'center', background: '#1e293b', padding: '0.4rem', borderRadius: '0.75rem', border: '1px solid #334155', gap: '0.4rem' }}>
-          {['Hoje', '7D', '15D', '30D'].map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              style={{
-                padding: '0.5rem 1rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer',
-                fontWeight: '800', fontSize: '0.8rem',
-                background: filters.period === p ? '#38bdf8' : 'transparent',
-                color: filters.period === p ? '#0f172a' : '#94a3b8',
-                transition: 'all 0.2s'
-              }}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="pdv-filters-bar">
+          <div className="pdv-period-buttons">
+            {['Hoje', '7D', '15D', '30D'].map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className="pdv-period-btn"
+                style={{
+                  background: filters.period === p ? '#38bdf8' : 'transparent',
+                  color: filters.period === p ? '#0f172a' : '#94a3b8'
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
           
-          <div style={{ width: '1px', height: '20px', background: '#334155', margin: '0 0.5rem' }}></div>
+          <div className="pdv-period-divider"></div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="pdv-date-picker-group">
             <input 
               type="date" 
               value={filters.startDate}
               onChange={(e) => setFilters({ ...filters, startDate: e.target.value, period: 'Personalizado' })}
-              style={{ background: '#0f172a', border: '1px solid #334155', color: 'white', padding: '0.3rem 0.5rem', borderRadius: '0.4rem', fontSize: '0.8rem', outline: 'none' }}
+              className="pdv-date-input"
             />
-            <span style={{ color: '#64748b' }}>até</span>
+            <span className="pdv-date-separator">até</span>
             <input 
               type="date" 
               value={filters.endDate}
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value, period: 'Personalizado' })}
-              style={{ background: '#0f172a', border: '1px solid #334155', color: 'white', padding: '0.3rem 0.5rem', borderRadius: '0.4rem', fontSize: '0.8rem', outline: 'none' }}
+              className="pdv-date-input"
             />
           </div>
 
           <button 
             onClick={() => setShowForm(true)}
             title="Registrar Venda Manual"
-            style={{ marginLeft: '0.5rem', background: '#0ea5e9', color: 'white', border: 'none', width: '2.4rem', height: '2.4rem', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="pdv-add-btn"
           >
             <span className="material-icons-outlined">add</span>
           </button>
@@ -217,7 +212,7 @@ function PDV() {
       </div>
 
       {/* Cards de Métricas Principais */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--metrics-grid, repeat(4, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
           { label: 'Faturamento', value: formatCurrency(data.metrics.faturamento), color: '#10b981', icon: 'payments' },
           { label: 'Lucro Total', value: formatCurrency(data.metrics.lucro_total), color: '#38bdf8', icon: 'trending_up' },
@@ -234,7 +229,7 @@ function PDV() {
       </div>
 
       {/* SEÇÃO DE INTELIGÊNCIA (GRÁFICOS E RANKINGS) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--main-grid, 1fr 1fr 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
         
         {/* Gráfico de Origem (Tipo de Venda) */}
         <div style={{ background: '#1e293b', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #334155' }}>
@@ -310,26 +305,23 @@ function PDV() {
 
       {/* Seção da Tabela com Busca */}
       <div style={{ background: '#1e293b', borderRadius: '1rem', border: '1px solid #334155', overflow: 'hidden' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>Histórico de Vendas Recentes</h3>
+        <div className="pdv-table-header">
+          <h3>Histórico de Vendas Recentes</h3>
           
           {/* BUSCA INTELIGENTE */}
-          <div style={{ position: 'relative', width: '300px' }}>
+          <div className="pdv-search-container">
             <span className="material-icons-outlined" style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '1.2rem' }}>search</span>
             <input 
               type="text" 
               placeholder="Buscar por nome, WhatsApp ou ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ 
-                width: '100%', background: '#0f172a', border: '1px solid #334155', color: 'white', 
-                padding: '0.6rem 1rem 0.6rem 2.5rem', borderRadius: '0.75rem', fontSize: '0.85rem', outline: 'none'
-              }}
             />
           </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        {/* Tabela de Vendas para Desktop */}
+        <div className="table-responsive desktop-only" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #334155', color: '#94a3b8' }}>
@@ -377,13 +369,54 @@ function PDV() {
               ))}
             </tbody>
           </table>
-          {filteredSales.length === 0 && (
-            <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-              <span className="material-icons-outlined" style={{ fontSize: '3rem', marginBottom: '1rem' }}>search_off</span>
-              <p>Nenhuma venda encontrada para "{searchTerm}"</p>
-            </div>
-          )}
         </div>
+
+        {/* Lista de Vendas para Mobile */}
+        <div className="mobile-only pdv-mobile-sales-list">
+          {filteredSales.map((sale) => (
+            <div key={sale.id} className="pdv-mobile-sale-card">
+              <div className="pdv-mobile-sale-card-header">
+                <span className="pdv-sale-id">#{sale.id}</span>
+                <span className="pdv-sale-status-badge">
+                  {sale.statusVenda}
+                </span>
+              </div>
+              
+              <div className="pdv-mobile-sale-card-body">
+                <h4 className="pdv-sale-client-name">{sale.nomeCliente || 'Cliente Final'}</h4>
+                <span className="pdv-sale-type-badge" data-type={sale.tipoVenda}>
+                  {sale.tipoVenda}
+                </span>
+              </div>
+              
+              <div className="pdv-mobile-sale-card-details">
+                <div className="pdv-detail-item">
+                  <span className="material-icons-outlined">call</span>
+                  <a href={`tel:${sale.telefoneCliente}`} className="pdv-phone-link">
+                    {formatPhone(sale.telefoneCliente)}
+                  </a>
+                </div>
+                <div className="pdv-detail-item">
+                  <span className="material-icons-outlined">person</span>
+                  <span>{sale.vendedor || 'Sem Vendedor'}</span>
+                </div>
+              </div>
+              
+              <div className="pdv-mobile-sale-card-footer">
+                <span className="pdv-sale-date">{new Date(sale.createdAt).toLocaleString('pt-BR')}</span>
+                <span className="pdv-sale-value">{formatCurrency(sale.valorTotal)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Mensagem caso não encontre vendas */}
+        {filteredSales.length === 0 && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+            <span className="material-icons-outlined" style={{ fontSize: '3rem', marginBottom: '1rem' }}>search_off</span>
+            <p>Nenhuma venda encontrada para "{searchTerm}"</p>
+          </div>
+        )}
       </div>
 
       {/* Modal de Venda Manual */}
