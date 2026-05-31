@@ -32,6 +32,37 @@ const TypewriterText = ({ text, animate = true }) => {
   );
 };
 
+const parseJarvisMessage = (content) => {
+  if (!content) return { speech: '', screen: '', full: '' };
+  
+  if (content.includes('[FALA]') || content.includes('[TELA]') || content.includes('[TRANSICAO]')) {
+    const falaMatch = content.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|\[TRANSICAO\]|$)/i);
+    const telaMatch = content.match(/\[TELA\]([\s\S]*?)(?:\[TRANSICAO\]|$)/i) || content.match(/\[TELA\]([\s\S]*)$/i);
+    
+    const spokenText = falaMatch ? falaMatch[1].trim() : '';
+    const screenText = telaMatch ? telaMatch[1].trim() : '';
+    
+    return {
+      speech: spokenText || content.replace(/\[TELA\][\s\S]*/gi, '').replace(/\[TRANSICAO\][\s\S]*/gi, '').replace(/\[FALA\]/gi, '').trim(),
+      screen: screenText,
+      full: spokenText ? `> ${spokenText}\n\n${screenText}` : screenText
+    };
+  }
+  
+  if (content.startsWith('>')) {
+    const parts = content.split('\n\n');
+    const speech = parts[0].replace(/^>\s*/, '').trim();
+    const screen = parts.slice(1).join('\n\n').trim();
+    return { speech, screen, full: content };
+  }
+
+  return {
+    speech: content,
+    screen: '',
+    full: content
+  };
+};
+
 function Reports() {
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -188,7 +219,8 @@ function Reports() {
     }
   };
 
-  const messagesEndRef = useRef(null);
+  const desktopMessagesEndRef = useRef(null);
+  const mobileMessagesEndRef = useRef(null);
   const hasGreetedRef = useRef(messages.length > 0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -280,9 +312,19 @@ function Reports() {
 
   // Removido o useEffect antigo de saudação, agora integrado no initJarvis
 
+  // Scroll do desktop (sempre que mensagens mudarem)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (desktopMessagesEndRef.current) {
+      desktopMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
+
+  // Scroll do mobile (apenas se a gaveta de chat estiver aberta)
+  useEffect(() => {
+    if (isMobileChatExpanded && mobileMessagesEndRef.current) {
+      mobileMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isMobileChatExpanded]);
 
   const sendMessageToJarvis = async (textToSend) => {
     if (!textToSend.trim()) return;
@@ -932,7 +974,7 @@ function Reports() {
                   <div className={`max-w-[70%] ${msg.role === 'user' ? 'border-r-2 border-amber-500/50 pr-4 text-right' : 'border-l-2 border-primary/30 pl-4 text-left'}`}>
                     <div className={`text-[13px] leading-relaxed mb-1 ${msg.role === 'user' ? 'text-amber-400' : 'text-primary/70'}`}
                          style={msg.role === 'user' ? { textShadow: '0 0 8px rgba(251,191,36,0.3)' } : {}}>
-                      {msg.role === 'jarvis' ? <TypewriterText text={msg.content} animate={msg.animate !== false} /> : msg.content}
+                      {msg.role === 'jarvis' ? <TypewriterText text={parseJarvisMessage(msg.content).full} animate={msg.animate !== false} /> : msg.content}
                     </div>
                     <div className={`text-[9px] uppercase tracking-widest ${msg.role === 'user' ? 'text-amber-500/50' : 'text-primary/30'}`}>
                       &gt; {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESP'} [{msg.time}]
@@ -946,7 +988,7 @@ function Reports() {
                 <span className="w-2 h-3.5 bg-primary ml-2 animate-pulse"></span>
               </div>
 
-              <div ref={messagesEndRef}></div>
+              <div ref={desktopMessagesEndRef}></div>
             </div>
 
             {/* Input Bar */}
@@ -1050,7 +1092,7 @@ function Reports() {
               {messages.length > 0 ? (
                 <div className="jarvis-last-message-bubble">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {messages[messages.length - 1].content.replace(/\[FALA\]/gi, '').replace(/\[TELA\][\s\S]*/gi, '').replace(/\[TRANSICAO\][\s\S]*/gi, '')}
+                    {parseJarvisMessage(messages[messages.length - 1].content).speech}
                   </ReactMarkdown>
                 </div>
               ) : (
@@ -1076,7 +1118,7 @@ function Reports() {
                   <div key={index} className={`jarvis-bubble-row ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
                     <div className={`jarvis-chat-bubble ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content.replace(/\[FALA\]/gi, '').replace(/\[TELA\][\s\S]*/gi, '').replace(/\[TRANSICAO\][\s\S]*/gi, '')}
+                        {msg.role === 'jarvis' ? parseJarvisMessage(msg.content).full : msg.content}
                       </ReactMarkdown>
                       <span className={`jarvis-bubble-time ${msg.role === 'user' ? 'user' : 'jarvis'}`}>
                         {msg.time.split(' às ')[1] || msg.time}
@@ -1090,7 +1132,7 @@ function Reports() {
                     <p>Sem histórico de conversas nesta sessão</p>
                   </div>
                 )}
-                <div ref={messagesEndRef}></div>
+                 <div ref={mobileMessagesEndRef}></div>
               </div>
             </div>
 

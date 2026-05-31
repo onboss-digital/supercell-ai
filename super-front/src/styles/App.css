@@ -2117,6 +2117,7 @@ select option,
   justify-content: center;
   position: relative;
   padding: 1.5rem;
+  padding-bottom: 160px; /* Dá espaço para a barra de input e bottom nav */
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -2131,18 +2132,18 @@ select option,
 /* Esfera 3D/CSS de Jarvis */
 .jarvis-sphere-outer {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 130px;
+  height: 130px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .jarvis-sphere-glow {
   position: absolute;
-  width: 150px;
-  height: 150px;
+  width: 110px;
+  height: 110px;
   background: radial-gradient(circle, rgba(0, 245, 255, 0.15) 0%, transparent 70%);
   border-radius: 50%;
   filter: blur(10px);
@@ -2155,8 +2156,8 @@ select option,
 }
 
 .jarvis-sphere-ring-1 {
-  width: 160px;
-  height: 160px;
+  width: 120px;
+  height: 120px;
   animation: spinX 6s linear infinite;
   border-top: 2px solid var(--color-primary);
   border-bottom: 2px solid var(--color-primary);
@@ -2164,8 +2165,8 @@ select option,
 }
 
 .jarvis-sphere-ring-2 {
-  width: 140px;
-  height: 140px;
+  width: 100px;
+  height: 100px;
   animation: spinY 8s linear infinite;
   border-left: 2px solid #8b5cf6;
   border-right: 2px solid #8b5cf6;
@@ -2173,8 +2174,8 @@ select option,
 }
 
 .jarvis-sphere-ring-3 {
-  width: 120px;
-  height: 120px;
+  width: 85px;
+  height: 85px;
   animation: spinZ 10s linear infinite;
   border-top: 1px dashed var(--color-primary);
   border-left: 1px dashed var(--color-primary);
@@ -2182,8 +2183,8 @@ select option,
 
 .jarvis-sphere-center {
   position: absolute;
-  width: 90px;
-  height: 90px;
+  width: 65px;
+  height: 65px;
   background: radial-gradient(circle, rgba(0, 245, 255, 0.25) 0%, rgba(6, 10, 15, 0.8) 80%);
   border: 2px solid var(--color-primary);
   border-radius: 50%;
@@ -2198,9 +2199,9 @@ select option,
 .jarvis-sphere-center span {
   font-family: 'Montserrat', sans-serif;
   font-weight: 900;
-  font-size: 1rem;
+  font-size: 0.75rem;
   color: #fff;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
   text-shadow: 0 0 8px var(--color-primary);
 }
 
@@ -2305,6 +2306,7 @@ select option,
   flex: 1;
   overflow-y: auto;
   padding: 1.25rem;
+  padding-bottom: 160px; /* Evita sobreposição com input bar e bottom nav */
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -2377,6 +2379,10 @@ select option,
 
 /* Input flutuante de Chat Mobile */
 .jarvis-mobile-input-bar {
+  position: absolute;
+  bottom: 72px !important; /* Fixa acima da bottom nav de 72px */
+  left: 0;
+  right: 0;
   background: rgba(15, 23, 42, 0.95);
   border-top: 1px solid rgba(0, 245, 255, 0.15);
   padding: 0.75rem 1rem;
