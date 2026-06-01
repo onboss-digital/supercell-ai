@@ -28,6 +28,7 @@ function CRM() {
 
   // Novo estado para abas do modal no mobile
   const [activeModalTab, setActiveModalTab] = useState('chat');
+  const [showStatsMobile, setShowStatsMobile] = useState(false);
 
 
 
@@ -434,6 +435,29 @@ function CRM() {
 
   };
 
+  const renderTempBadge = (temp) => {
+    const tempColors = {
+      'Quente': { bg: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.25)', text: '#ff5c5c' },
+      'Morno': { bg: 'rgba(249, 115, 22, 0.12)', border: 'rgba(249, 115, 22, 0.25)', text: '#f97316' },
+      'Frio': { bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.25)', text: '#5cb0ff' }
+    };
+    const current = tempColors[temp] || { bg: 'rgba(148, 163, 184, 0.12)', border: 'rgba(148, 163, 184, 0.25)', text: '#94a3b8' };
+    return (
+      <span style={{ 
+        fontSize: '0.55rem', 
+        background: current.bg, 
+        color: current.text, 
+        border: `1px solid ${current.border}`, 
+        padding: '0.15rem 0.4rem', 
+        borderRadius: '4px', 
+        fontWeight: '900',
+        letterSpacing: '0.05em'
+      }}>
+        {temp.toUpperCase()}
+      </span>
+    );
+  };
+
 
 
   return (
@@ -485,24 +509,46 @@ function CRM() {
               
 
               <button 
+                onClick={() => setShowStatsMobile(!showStatsMobile)}
+                className="crm-stats-toggle-btn"
+                style={{
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.3rem', 
+                  padding: '0.4rem 0.8rem', 
+                  borderRadius: '2rem',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: showStatsMobile ? 'var(--color-primary)' : 'rgba(255,255,255,0.05)',
+                  color: showStatsMobile ? 'black' : 'white',
+                  cursor: 'pointer',
+                  fontWeight: '800',
+                  fontSize: '0.7rem',
+                  transition: '0.3s'
+                }}
+              >
+                <span className="material-icons-outlined" style={{ fontSize: '1rem' }}>bar_chart</span>
+                <span>{showStatsMobile ? 'OCULTAR' : 'RESUMO'}</span>
+              </button>
+
+              <button 
 
                 onClick={() => setShowFilters(true)}
 
                 style={{ 
 
-                  display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', borderRadius: '2rem', 
+                  display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.8rem', borderRadius: '2rem', 
 
                   border: '1px solid rgba(255,255,255,0.2)', background: (statusFilter !== 'Todos' || platformFilter !== 'Todos' || tempFilter !== 'Todos' || campaignSearch || adSearch) ? 'var(--color-primary)' : 'rgba(255,255,255,0.05)', 
 
-                  color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.75rem', transition: '0.3s'
+                  color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.7rem', transition: '0.3s'
 
                 }}
 
               >
 
-                <span className="material-icons-outlined" style={{ fontSize: '1.1rem' }}>filter_list</span>
+                <span className="material-icons-outlined" style={{ fontSize: '1rem' }}>filter_list</span>
 
-                FILTRAR {(statusFilter !== 'Todos' || platformFilter !== 'Todos' || tempFilter !== 'Todos' || campaignSearch || adSearch) && "•"}
+                <span>FILTRAR {(statusFilter !== 'Todos' || platformFilter !== 'Todos' || tempFilter !== 'Todos' || campaignSearch || adSearch) && "•"}</span>
               </button>
 
             </div>
@@ -513,7 +559,7 @@ function CRM() {
 
           {/* Remarketing Suggestions & Quick Stats */}
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+          <div className={`crm-stats-wrapper ${showStatsMobile ? 'show-mobile' : 'hide-mobile'}`} style={{ gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
 
              {/* Stats Cards Dinâmicos */}
              <div className="crm-stats-grid">
@@ -1034,7 +1080,7 @@ function CRM() {
 
                    {filteredLeads.filter(l => l.status === status).map(lead => (
 
-                     <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} onDragEnd={onDragEnd} onClick={() => setSelectedLead(lead)} className="crm-kanban-card">
+                     <div key={lead.id} draggable={window.innerWidth > 768} onDragStart={(e) => onDragStart(e, lead.id)} onDragEnd={onDragEnd} onClick={() => setSelectedLead(lead)} className="crm-kanban-card">
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
 
@@ -1042,7 +1088,7 @@ function CRM() {
 
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
 
-                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#000000' }}>{lead.name}</span>
+                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: 'var(--color-on-surface)' }}>{lead.name}</span>
 
                                 {lead.hasUnread && (
 
@@ -1096,13 +1142,13 @@ function CRM() {
 
                         )}
 
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ borderTop: '1px solid var(--color-outline-variant)', paddingTop: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
 
-                              <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: '800' }}>{lead.campaignName || 'Direto'}</span>
+                              <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', fontWeight: '800' }}>{lead.campaignName || 'Direto'}</span>
 
-                              <span style={{ fontSize: '0.55rem', color: '#cbd5e1', fontWeight: '700' }}>
+                              <span style={{ fontSize: '0.55rem', color: 'var(--color-on-surface-variant)', fontWeight: '700' }}>
 
                                  {new Date(lead.createdAt).toLocaleDateString('pt-BR')} {new Date(lead.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 
@@ -1110,13 +1156,7 @@ function CRM() {
 
                            </div>
 
-                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-
-                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: getTempColor(lead.temperature) }}></div>
-
-                              <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: '800' }}>{lead.temperature}</span>
-
-                           </div>
+                           {renderTempBadge(lead.temperature)}
 
                         </div>
 
@@ -1395,9 +1435,9 @@ function CRM() {
 
                       <div>
 
-                         <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>{selectedLead.name}</h3>
+                         <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: 'var(--color-on-surface)' }}>{selectedLead.name}</h3>
 
-                         <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700' }}>{selectedLead.platform === 'instagram' ? `@${selectedLead.instagramHandle || 'direct'}` : selectedLead.phone}</span>
+                         <span style={{ fontSize: '0.8rem', color: 'var(--color-on-surface-variant)', fontWeight: '700' }}>{selectedLead.platform === 'instagram' ? `@${selectedLead.instagramHandle || 'direct'}` : selectedLead.phone}</span>
 
                       </div>
 
@@ -1409,13 +1449,37 @@ function CRM() {
 
                        <div>
 
-                          <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Status do Funil</p>
+                          <p style={{ fontSize: '0.65rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Status do Funil</p>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.75rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-container-high)', padding: '0.5rem 1rem', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)' }}>
 
                              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: getStatusColor(selectedLead.status) }}></div>
 
-                             <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1e293b' }}>{selectedLead.status}</span>
+                             <select 
+                                value={selectedLead.status}
+                                onChange={(e) => {
+                                  const newStatus = e.target.value;
+                                  updateLeadStatus(selectedLead.id, newStatus);
+                                  setSelectedLead(prev => ({ ...prev, status: newStatus }));
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--color-on-surface)',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '800',
+                                  outline: 'none',
+                                  cursor: 'pointer',
+                                  width: '100%',
+                                  fontFamily: 'inherit'
+                                }}
+                              >
+                                {statuses.map(s => (
+                                  <option key={s} value={s} style={{ background: 'var(--color-surface-dim)', color: 'var(--color-on-surface)' }}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
 
                           </div>
 
@@ -1425,31 +1489,31 @@ function CRM() {
 
                        <div>
 
-                          <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Origem da Captura</p>
+                          <p style={{ fontSize: '0.65rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Origem da Captura</p>
 
-                          <div style={{ background: 'white', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                          <div style={{ background: 'var(--color-surface-container-high)', padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)' }}>
 
                              <div style={{ marginBottom: '0.75rem' }}>
 
-                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block' }}>Campanha</span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', display: 'block' }}>Campanha</span>
 
-                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a' }}>{selectedLead.campaignName || 'Tráfego Direto'}</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-on-surface)' }}>{selectedLead.campaignName || 'Tráfego Direto'}</span>
 
                              </div>
 
                              <div style={{ marginBottom: '0.75rem' }}>
 
-                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block' }}>Anúncio</span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', display: 'block' }}>Anúncio</span>
 
-                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a' }}>{selectedLead.adName || 'Orgânico'}</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-on-surface)' }}>{selectedLead.adName || 'Orgânico'}</span>
 
                              </div>
 
                              <div>
 
-                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block' }}>Conta de Anúncios</span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', display: 'block' }}>Conta de Anúncios</span>
 
-                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b' }}>{selectedLead.adAccountName || '—'}</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--color-on-surface-variant)' }}>{selectedLead.adAccountName || '—'}</span>
                             </div>
 
                           </div>
@@ -1461,12 +1525,12 @@ function CRM() {
                             <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#10B981', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Dados da Venda (PDV)</p>
                             <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '1rem', borderRadius: '1rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                                <div style={{ marginBottom: '0.75rem' }}>
-                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block' }}>Produto Adquirido</span>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#0f172a' }}>{selectedLead.productName || 'Produto não identificado'}</span>
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', display: 'block' }}>Produto Adquirido</span>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: '900', color: 'var(--color-on-surface)' }}>{selectedLead.productName || 'Produto não identificado'}</span>
                                </div>
                                <div>
-                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block' }}>Data da Conversão</span>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a' }}>
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', display: 'block' }}>Data da Conversão</span>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-on-surface)' }}>
                                     {new Date(selectedLead.updatedAt).toLocaleDateString('pt-BR')} às {new Date(selectedLead.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                </div>
@@ -1476,9 +1540,9 @@ function CRM() {
 
                         <div>
 
-                           <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Categorização (Tags)</p>
+                           <p style={{ fontSize: '0.65rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Categorização (Tags)</p>
 
-                           <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                           <div style={{ background: 'var(--color-surface-container-high)', padding: '1.25rem', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)' }}>
 
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
 
@@ -1528,11 +1592,11 @@ function CRM() {
 
                                          border: '1px solid',
 
-                                         background: isActive ? 'var(--color-primary)' : '#f8fafc',
+                                         background: isActive ? 'var(--color-primary)' : 'var(--color-surface)',
 
-                                         color: isActive ? '#000000' : '#64748b',
+                                         color: isActive ? '#000000' : 'var(--color-on-surface-variant)',
 
-                                         borderColor: isActive ? 'var(--color-primary)' : '#e2e8f0'
+                                         borderColor: isActive ? 'var(--color-primary)' : 'var(--color-outline-variant)'
 
                                        }}
 
@@ -1550,13 +1614,13 @@ function CRM() {
                         </div>
 
                         <div>
-                           <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Inteligência de Venda</p>
-                           <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: '1.25rem', borderRadius: '1rem', color: 'white' }}>
+                           <p style={{ fontSize: '0.65rem', fontWeight: '900', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Inteligência de Venda</p>
+                           <div style={{ background: 'var(--color-surface-container-high)', padding: '1.25rem', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
                                  <span className="material-icons-outlined" style={{ fontSize: '1.1rem', color: getTempColor(selectedLead.temperature) }}>thermostat</span>
-                                 <span style={{ fontSize: '0.75rem', fontWeight: '800' }}>Lead {selectedLead.temperature}</span>
+                                 <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-on-surface)' }}>Lead {selectedLead.temperature}</span>
                               </div>
-                              <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', lineHeight: '1.4', margin: 0 }}>
+                              <p style={{ fontSize: '0.7rem', color: 'var(--color-on-surface-variant)', lineHeight: '1.4', margin: 0 }}>
                                  O Jarvis recomenda: Este lead está{" "}{selectedLead.temperature.toLowerCase()}. {selectedLead.temperature === 'Frio' ? 'Envie uma oferta de reativação imediatamente.' : 'Mantenha o atendimento focado em fechar a venda hoje.'}
                               </p>
                            </div>
@@ -1573,7 +1637,7 @@ function CRM() {
                           <span className="material-icons-outlined">chat</span>
                           CONTATAR AGORA
                        </a>
-                       <button onClick={() => setSelectedLead(null)} style={{ width: '100%', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '800', cursor: 'pointer' }}>FECHAR PAINEL</button>
+                       <button onClick={() => setSelectedLead(null)} style={{ width: '100%', padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-outline)', background: 'var(--color-surface-container-high)', color: 'var(--color-on-surface)', fontWeight: '800', cursor: 'pointer' }}>FECHAR PAINEL</button>
 
 
                    </div>
@@ -1585,17 +1649,17 @@ function CRM() {
                {/* Coluna Direita: Histórico de Conversa (Chat) */}
                <div className={`crm-modal-right ${activeModalTab === 'chat' ? 'show-mobile' : 'hide-mobile'}`}>
 
-                   <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                   <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--color-outline-variant)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
 
-                         <span className="material-icons-outlined" style={{ color: '#0ea5e9' }}>forum</span>
+                         <span className="material-icons-outlined" style={{ color: 'var(--color-primary)' }}>forum</span>
 
-                         <h4 style={{ margin: 0, fontWeight: '900', color: '#0f172a', fontSize: '1rem' }}>HISTÓRICO DE CONVERSA</h4>
+                         <h4 style={{ margin: 0, fontWeight: '900', color: 'var(--color-on-surface)', fontSize: '1rem' }}>HISTÓRICO DE CONVERSA</h4>
 
                       </div>
 
-                      <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', background: '#f1f5f9', padding: '0.4rem 0.8rem', borderRadius: '2rem' }}>
+                      <div style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)', background: 'var(--color-surface-container-high)', padding: '0.4rem 0.8rem', borderRadius: '2rem' }}>
 
                          Sincronizado via {selectedLead.platform.toUpperCase()}
 
@@ -1605,7 +1669,7 @@ function CRM() {
 
 
 
-                   <div style={{ flex: 1, padding: '2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#fff' }} className="chat-container">
+                   <div style={{ flex: 1, padding: '2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--color-surface-container-lowest)' }} className="chat-container">
 
                        {loadingMessages ? (
 
@@ -1655,7 +1719,7 @@ function CRM() {
 
                                    flexShrink: 0,
 
-                                   background: m.sender === 'lead' ? '#e2e8f0' : '#0ea5e9',
+                                   background: m.sender === 'lead' ? 'var(--color-surface-container-high)' : 'var(--color-primary-glow)',
 
                                    display: 'flex',
 
@@ -1705,15 +1769,17 @@ function CRM() {
 
                                       borderRadius: m.sender === 'lead' ? '1.25rem 1.25rem 1.25rem 0' : '1.25rem 1.25rem 0 1.25rem', 
 
-                                      background: m.sender === 'lead' ? '#f1f5f9' : '#0ea5e9', 
+                                      background: m.sender === 'lead' ? 'var(--color-surface-container-highest)' : 'var(--color-primary-container)', 
 
-                                      color: m.sender === 'lead' ? '#1e293b' : 'white',
+                                      color: m.sender === 'lead' ? 'var(--color-on-surface)' : 'var(--color-primary)',
+
+                                      border: m.sender === 'lead' ? '1px solid var(--color-outline-variant)' : '1px solid rgba(0, 245, 255, 0.25)',
 
                                       fontSize: '0.85rem',
 
                                       fontWeight: '500',
 
-                                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
 
                                       lineHeight: '1.5'
 
@@ -1763,7 +1829,7 @@ function CRM() {
 
 
 
-                   <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                   <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid var(--color-outline-variant)', background: 'var(--color-surface-container-low)' }}>
 
                       <div style={{ display: 'flex', gap: '1rem' }}>
 
@@ -1779,7 +1845,7 @@ function CRM() {
 
                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
 
-                           style={{ flex: 1, padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b', fontSize: '0.85rem' }} 
+                           style={{ flex: 1, padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-outline)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', fontSize: '0.85rem' }} 
 
                          />
 
@@ -1791,7 +1857,7 @@ function CRM() {
 
                            style={{ 
 
-                             background: '#0ea5e9', color: 'white', border: 'none', padding: '0 2rem', borderRadius: '1rem', 
+                             background: 'var(--color-primary)', color: 'black', border: 'none', padding: '0 2rem', borderRadius: '1rem', 
 
                              fontWeight: '800', cursor: (sending || !newMessage.trim()) ? 'not-allowed' : 'pointer', 
 

@@ -105,6 +105,9 @@ function Dashboard() {
       setActiveTemplate(tplKey);
       setSelectedMetricIds(nativeMetrics.map(m => m.id));
       setSelectedFunnelIds(nativeFunnels ? nativeFunnels.map(f => f.id) : []);
+      if (tplKey !== 'personalizado') {
+        setIsSidebarOpen(false);
+      }
     } else {
       // Tenta encontrar nos templates customizados
       const custom = customTemplates.find(t => t.id === tplKey);
@@ -112,6 +115,7 @@ function Dashboard() {
         setActiveTemplate(tplKey);
         setSelectedMetricIds(custom.metricIds || []);
         setSelectedFunnelIds(custom.funnelIds || []);
+        setIsSidebarOpen(false);
       }
     }
   };
