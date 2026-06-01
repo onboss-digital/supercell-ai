@@ -381,6 +381,7 @@ function Reports() {
       currentAudioRef.current.pause();
       currentAudioRef.current.currentTime = 0;
     }
+    window.speechSynthesis.cancel(); // Cancela qualquer fala anterior do navegador
 
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -391,6 +392,50 @@ function Reports() {
     setMessages(newMessages);
     setSystemState("SIS.PROC");
 
+    const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';
+
+    // --- ANTECIPAÇÃO DE FALA PREVENTIVA (FLUIDEZ E CONSISTÊNCIA DE VOZ) ---
+    // Se a pergunta for representativa (> 15 caracteres), fala instantaneamente uma frase de transição.
+    const isRepresentativelyLong = textToSend.trim().length > 15;
+    if (isRepresentativelyLong) {
+      const frasesTransicao = [
+        "Analisando, senhor. Um momento que vou verificar.",
+        "Procurando em nosso banco de dados, chefe. Só um instante.",
+        "Entendido, senhor. Deixe-me consultar as campanhas e vendas agora mesmo.",
+        "Localizando as informações, chefe. Aguarde um momento.",
+        "Processando sua solicitação, senhor. Um instante por favor.",
+        "Acessando os servidores para checar esses dados, chefe. Um segundo.",
+        "Pesquisando na base de dados, senhor. Um momento.",
+        "Verificando as métricas, chefe. Só um instante."
+      ];
+      const fraseAleatoria = frasesTransicao[Math.floor(Math.random() * frasesTransicao.length)];
+      
+      if (voicePreference === 'browser') {
+        console.log('⚡ [JARVIS] Fala preventiva acionada (Nativa):', fraseAleatoria);
+        const utterance = new SpeechSynthesisUtterance(fraseAleatoria);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.05; 
+        utterance.pitch = 1.0;
+        
+        const voices = window.speechSynthesis.getVoices();
+        const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
+        if (googlePt) utterance.voice = googlePt;
+        
+        window.speechSynthesis.speak(utterance);
+      } else {
+        console.log('⚡ [JARVIS] Fala preventiva acionada (ElevenLabs):', fraseAleatoria);
+        const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(fraseAleatoria)}`;
+        const transicaoAudio = new Audio(transicaoUrl);
+        currentAudioRef.current = transicaoAudio;
+        transicaoAudio.play().catch(e => {
+          console.warn("⚠️ [JARVIS] Falha na fala preventiva via ElevenLabs, usando fallback do navegador:", e);
+          const utterance = new SpeechSynthesisUtterance(fraseAleatoria);
+          utterance.lang = 'pt-BR';
+          window.speechSynthesis.speak(utterance);
+        });
+      }
+    }
+
     try {
       const res = await fetch(`${API_URL}/api/jarvis/chat`, {
         method: 'POST',
@@ -398,6 +443,13 @@ function Reports() {
         body: JSON.stringify({ messages: newMessages })
       });
       const data = await res.json();
+      
+      // Parar qualquer áudio preventivo (ElevenLabs) ou fala nativa do navegador que esteja tocando
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      }
+      window.speechSynthesis.cancel();
       
       let replyText = data.reply;
       

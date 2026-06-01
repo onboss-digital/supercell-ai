@@ -232,7 +232,7 @@ const CinematicIntro = ({ onComplete, isSpeaking }) => {
         </div>
       </div>
 
-      <button onClick={onComplete} className="mt-4 px-10 py-2 border border-primary/30 bg-primary/5 text-primary font-label-caps tracking-[0.4em] text-[10px] hover:bg-primary/20 transition-all opacity-40 hover:opacity-100">
+      <button onClick={onComplete} className="order-first md:order-last mt-8 md:mt-4 mb-4 md:mb-0 px-10 py-2 border border-primary/30 bg-primary/5 text-primary font-label-caps tracking-[0.4em] text-[10px] hover:bg-primary/20 transition-all opacity-40 hover:opacity-100">
         RETORNAR AO COMANDO
       </button>
     </div>

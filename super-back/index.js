@@ -1379,12 +1379,8 @@ app.post('/api/jarvis/chat', async (req, res) => {
   const lastUserMessage = messages[messages.length - 1]?.content;
 
   try {
-    // Sincronizacao rapida preventiva antes de carregar metricas e responder pelo Jarvis
-    try {
-      await syncMercadoPhoneSales(100);
-    } catch (e) {
-      console.error('[JARVIS] Erro na sincronizacao preventiva:', e.message);
-    }
+    // Sincronização rápida preventiva em segundo plano para não travar a resposta (Melhoria de Performance)
+    syncMercadoPhoneSales(100).catch(e => console.error('[JARVIS] Erro na sincronização preventiva:', e.message));
 
     // 1. Salva a última mensagem do usuário se for nova (e não for um comando de sistema/saudação)
     const isSystemCommand = lastUserMessage && (lastUserMessage.includes('Aja como se o sistema tivesse acabado de ser ativado') || lastUserMessage.includes('[FALA]'));
@@ -1393,58 +1389,19 @@ app.post('/api/jarvis/chat', async (req, res) => {
       await pool.query('INSERT INTO "JarvisMessage" (role, content) VALUES ($1, $2)', ['user', lastUserMessage]);
     }
 
-    // 2. Busca histórico RECENTE do banco para dar contexto real (Memória Permanente)
-    const historyRes = await pool.query('SELECT role, content, "createdAt" FROM "JarvisMessage" ORDER BY "createdAt" DESC LIMIT 20');
-    const dbHistory = historyRes.rows.reverse();
+    // 2. Carrega histórico, configurações e contas ativas em paralelo (Melhoria de Performance)
+    const [dbHistoryRes, aiConfigRes, qAcc] = await Promise.all([
+      pool.query('SELECT role, content, "createdAt" FROM "JarvisMessage" ORDER BY "createdAt" DESC LIMIT 20'),
+      pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']),
+      pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a.status = \'ACTIVE\' LIMIT 1')
+    ]);
 
-    // Mescla histórico do banco com as mensagens atuais da sessão (evita duplicidade e garante contexto)
-    // Para simplificar e garantir precisão, vamos usar o dbHistory como base + a mensagem atual
+    const dbHistory = dbHistoryRes.rows.reverse();
     const contextualMessages = dbHistory;
-
-    // Busca config de IA do banco
-    const aiConfigRes = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
     const config = aiConfigRes.rows[0] || {};
     const systemPrompt = config.systemPrompt;
     const selectedModel = config.model || "gpt-4o";
 
-    // Puxa as métricas para múltiplos períodos para dar "visão total" ao Jarvis
-    const [metricsHoje, metricsOntem, metrics7Dias, metrics30Dias, metricsMes] = await Promise.all([
-      fetchDashboardMetrics({ periodo: 'hoje' }),
-      fetchDashboardMetrics({ periodo: 'ontem' }),
-      fetchDashboardMetrics({ periodo: '7dias' }),
-      fetchDashboardMetrics({ periodo: '30dias' }),
-      fetchDashboardMetrics({ periodo: 'mes' })
-    ]);
-
-    // Puxa lista de campanhas para análise estratégica
-    let campaignsContext = [];
-    try {
-      const qAcc = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a.status = \'ACTIVE\' LIMIT 1');
-      if (qAcc.rows.length > 0) {
-        const acc = qAcc.rows[0];
-        const decryptedToken = decrypt(acc.accessToken);
-        const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
-        const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,daily_budget,lifetime_budget,insights.date_preset(this_month){spend,actions,reach,impressions,clicks,cpc,cpm,ctr,frequency}&access_token=${decryptedToken}`;
-        const campRes = await fetch(url).then(r => r.json());
-        if (campRes.data) {
-          campaignsContext = campRes.data.map(c => {
-            const ins = c.insights?.data?.[0] || {};
-            return {
-              nome: c.name,
-              status: c.status,
-              orcamento: (parseFloat(c.daily_budget || c.lifetime_budget || 0) / 100).toFixed(2),
-              gastoMes: parseFloat(ins.spend || 0).toFixed(2),
-              ctr: parseFloat(ins.ctr || 0).toFixed(2) + "%",
-              cpc: parseFloat(ins.cpc || 0).toFixed(2),
-              cpm: parseFloat(ins.cpm || 0).toFixed(2),
-              freq: parseFloat(ins.frequency || 0).toFixed(2),
-              leadsMes: parseInt(ins.actions?.find(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')?.value || 0)
-            };
-          });
-        }
-      }
-    } catch (e) { console.error('Erro ao buscar campanhas para o Jarvis:', e); }
-    
     // CONTAGEM EM TEMPO REAL DO CRM (PARA TODOS OS PERÍODOS)
     const [todayStart, todayEnd] = getAcreDateRange('hoje');
     const [yesterdayStart, yesterdayEnd] = getAcreDateRange('ontem');
@@ -1459,38 +1416,94 @@ app.post('/api/jarvis/chat', async (req, res) => {
     startMonthAcre.setUTCHours(0, 0, 0, 0);
     const startMonth = new Date(startMonthAcre.getTime() + ACRE_OFFSET);
 
-    const leadsHojeDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count));
-    const leadsOntemDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count));
-    const leads7DiasDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start7d]).then(r => parseInt(r.rows[0].count));
-    const leads30DiasDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start30d]).then(r => parseInt(r.rows[0].count));
-    const leadsMesDB = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startMonth]).then(r => parseInt(r.rows[0].count));
+    // Carrega dados de campanhas do Facebook em paralelo (se conta estiver ativa)
+    let campaignsPromise = Promise.resolve([]);
+    if (qAcc.rows.length > 0) {
+      const acc = qAcc.rows[0];
+      const decryptedToken = decrypt(acc.accessToken);
+      const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
+      const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,daily_budget,lifetime_budget,insights.date_preset(this_month){spend,actions,reach,impressions,clicks,cpc,cpm,ctr,frequency}&access_token=${decryptedToken}`;
+      campaignsPromise = fetch(url)
+        .then(r => r.json())
+        .then(campRes => {
+          if (campRes.data) {
+            return campRes.data.map(c => {
+              const ins = c.insights?.data?.[0] || {};
+              return {
+                nome: c.name,
+                status: c.status,
+                orcamento: (parseFloat(c.daily_budget || c.lifetime_budget || 0) / 100).toFixed(2),
+                gastoMes: parseFloat(ins.spend || 0).toFixed(2),
+                ctr: parseFloat(ins.ctr || 0).toFixed(2) + "%",
+                cpc: parseFloat(ins.cpc || 0).toFixed(2),
+                cpm: parseFloat(ins.cpm || 0).toFixed(2),
+                freq: parseFloat(ins.frequency || 0).toFixed(2),
+                leadsMes: parseInt(ins.actions?.find(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')?.value || 0)
+              };
+            });
+          }
+          return [];
+        })
+        .catch(e => {
+          console.error('Erro ao buscar campanhas para o Jarvis:', e);
+          return [];
+        });
+    }
 
-    const salesToday = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count));
-    
-    const recentLeadsRes = await pool.query(`
-      SELECT l.name, l.status, l.platform,
-        (
-          SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
-          FROM (
-            SELECT sender, content, "createdAt" as idx 
-            FROM "Message" 
-            WHERE "leadId" = l.id 
-            ORDER BY "createdAt" DESC 
-            LIMIT 10
-          ) m
-        ) as "chatHistory"
-      FROM "Lead" l 
-      ORDER BY l."lastInteractionAt" DESC LIMIT 5
-    `);
-    const recentSalesRes = await pool.query(`
-      SELECT s.*, 
-             l.platform as lead_platform, 
-             l."campaignName" as lead_campaign
-      FROM "Sale" s
-      LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
-      ORDER BY s."createdAt" DESC LIMIT 10
-    `);
-    
+    // Puxa as métricas de dashboard e todas as contagens em paralelo! (Melhoria de Performance)
+    const [
+      [metricsHoje, metricsOntem, metrics7Dias, metrics30Dias, metricsMes],
+      campaignsContext,
+      leadsHojeDB,
+      leadsOntemDB,
+      leads7DiasDB,
+      leads30DiasDB,
+      leadsMesDB,
+      recentLeadsRes,
+      recentSalesRes,
+      customGoals,
+      kbFiles
+    ] = await Promise.all([
+      Promise.all([
+        fetchDashboardMetrics({ periodo: 'hoje' }),
+        fetchDashboardMetrics({ periodo: 'ontem' }),
+        fetchDashboardMetrics({ periodo: '7dias' }),
+        fetchDashboardMetrics({ periodo: '30dias' }),
+        fetchDashboardMetrics({ periodo: 'mes' })
+      ]),
+      campaignsPromise,
+      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count)),
+      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count)),
+      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start7d]).then(r => parseInt(r.rows[0].count)),
+      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start30d]).then(r => parseInt(r.rows[0].count)),
+      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startMonth]).then(r => parseInt(r.rows[0].count)),
+      pool.query(`
+        SELECT l.name, l.status, l.platform,
+          (
+            SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
+            FROM (
+              SELECT sender, content, "createdAt" as idx 
+              FROM "Message" 
+              WHERE "leadId" = l.id 
+              ORDER BY "createdAt" DESC 
+              LIMIT 10
+            ) m
+          ) as "chatHistory"
+        FROM "Lead" l 
+        ORDER BY l."lastInteractionAt" DESC LIMIT 5
+      `),
+      pool.query(`
+        SELECT s.*, 
+               l.platform as lead_platform, 
+               l."campaignName" as lead_campaign
+        FROM "Sale" s
+        LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
+        ORDER BY s."createdAt" DESC LIMIT 10
+      `),
+      prisma.customGoal.findMany({ where: { active: true } }),
+      prisma.knowledgeFile.findMany({ where: { active: true } })
+    ]);
+
     // Função auxiliar para formatar métricas completas para o Jarvis
     const formatFullMetrics = (d, contatosReais = null) => {
       const m = d.metrics;
@@ -1530,10 +1543,6 @@ app.post('/api/jarvis/chat', async (req, res) => {
       recentSales: recentSalesRes.rows
     };
 
-    const customGoals = await prisma.customGoal.findMany({ where: { active: true } });
-    
-    // Busca Base de Conhecimento ativa
-    const kbFiles = await prisma.knowledgeFile.findMany({ where: { active: true } });
     const knowledgeContext = kbFiles.map(f => `### DOCUMENTO: ${f.fileName} ###\n${f.content}`).join('\n\n');
 
     const jarvisTextReply = await generateJarvisChatResponse(

@@ -808,6 +808,7 @@ select option,
   position: fixed;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   background: var(--color-surface-container-lowest);
   box-shadow: -10px 0 30px rgba(0,0,0,0.1);
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -816,6 +817,7 @@ select option,
   flex-direction: column;
   width: 100%;
   max-width: 420px;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @media (max-width: 480px) {
@@ -866,8 +868,9 @@ select option,
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
+  background: rgba(0, 8, 10, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -879,18 +882,19 @@ select option,
   width: 100%;
   max-width: 1000px;
   height: 85vh;
-  background: white;
+  background: var(--color-surface-dim);
   border-radius: 2.5rem;
   display: flex;
-  box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--color-outline);
   position: relative;
   overflow: hidden;
 }
 
 .crm-modal-left {
   width: 380px;
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
+  background: var(--color-surface-container-low);
+  border-right: 1px solid var(--color-outline-variant);
   display: flex;
   flex-direction: column;
   padding: 2rem;
@@ -901,7 +905,7 @@ select option,
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--color-surface);
 }
 
 @media (max-width: 768px) {
@@ -916,13 +920,13 @@ select option,
   .crm-modal-left {
     width: 100% !important;
     height: auto !important;
-    max-height: 40% !important;
+    max-height: 45% !important;
     border-right: none !important;
-    border-bottom: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid var(--color-outline-variant) !important;
     padding: 1.25rem !important;
   }
   .crm-modal-right {
-    height: 60% !important;
+    height: 55% !important;
   }
   .crm-modal-right .chat-container {
     padding: 1rem !important;
@@ -1501,7 +1505,8 @@ select option,
   }
   .crm-header-actions {
     width: 100% !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
     gap: 0.5rem !important;
   }
 }
@@ -1626,14 +1631,54 @@ select option,
   box-shadow: 0 5px 15px rgba(0, 245, 255, 0.1) !important;
 }
 
+/* Wrapper de Estatísticas do CRM */
+.crm-stats-wrapper {
+  display: flex;
+  width: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Botão de Toggle de Estatísticas no Desktop (sempre oculto) */
+.crm-stats-toggle-btn {
+  display: none !important;
+}
+
 @media (max-width: 768px) {
+  /* Botão de Toggle de Estatísticas no Mobile */
+  .crm-stats-toggle-btn {
+    display: flex !important;
+  }
+
+  /* Exibição condicional do painel de estatísticas no mobile */
+  .crm-stats-wrapper.hide-mobile {
+    display: none !important;
+  }
+  .crm-stats-wrapper.show-mobile {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100%;
+    animation: slideDownMobile 0.25s ease-out;
+  }
+
+  @keyframes slideDownMobile {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   .crm-kanban-section {
-    padding: 1rem !important;
-    gap: 1rem !important;
+    padding: 0.75rem !important;
+    gap: 0.75rem !important;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    scroll-behavior: smooth;
   }
   .crm-kanban-column {
-    width: 82vw !important;
-    max-width: 290px !important;
+    width: 85vw !important;
+    max-width: 310px !important;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    height: 100% !important;
   }
 }
 

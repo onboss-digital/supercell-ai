@@ -1073,7 +1073,7 @@ function Settings() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {/* Seção do Prompt */}
-              <div style={{ background: 'var(--color-surface-container-lowest)', padding: '2rem', borderRadius: '1.5rem', border: '1px solid var(--color-surface-container-low)' }}>
+              <div style={{ background: 'var(--color-surface-container-lowest)', padding: 'var(--card-padding, 2rem)', borderRadius: '1.5rem', border: '1px solid var(--color-surface-container-low)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: '900', color: 'var(--color-on-surface)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   <span className="material-icons-outlined" style={{ fontSize: '1.1rem', color: '#0EA5E9' }}>psychology</span>
                   DNA da Personalidade e Diretrizes (Editável)
@@ -1086,9 +1086,9 @@ function Settings() {
                   onChange={(e) => setAiSystemPrompt(e.target.value)}
                   placeholder="Ex: Você é o J.A.R.V.I.S., mentor de alta performance. Trate-me como Senhor Senhor Gustavo. Sua meta principal é o lucro real..."
                   style={{ 
-                    width: '100%', minHeight: '150px', padding: '1.5rem', borderRadius: '1rem', 
-                    border: '1.5px solid #0EA5E9', background: '#f8fafc', outline: 'none', 
-                    fontSize: '0.95rem', color: '#334155', fontWeight: '500', lineHeight: '1.6',
+                    width: '100%', minHeight: '150px', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1rem', 
+                    border: '1.5px solid var(--color-outline)', background: 'var(--color-surface)', outline: 'none', 
+                    fontSize: '0.95rem', color: 'var(--color-on-surface)', fontWeight: '500', lineHeight: '1.6',
                     fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box'
                   }}
                 />
@@ -1097,7 +1097,7 @@ function Settings() {
                   <span className="material-icons-outlined" style={{ fontSize: '1.1rem' }}>lock</span>
                   Regras de Arquitetura do Sistema (Bloqueado no Back-end)
                 </label>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--color-on-surface-variant)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
                   Estas regras são injetadas de forma invisível pelo servidor. Elas protegem o código e garantem que a interface consiga separar a fala em áudio do relatório em texto.
                 </p>
                 <textarea 
@@ -1117,9 +1117,9 @@ REGRAS RÍGIDAS PARA A TAG [FALA] (Áudio):
 REGRAS PARA A TAG [TELA] (Visual):
 Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE EMOJIS.`}
                   style={{ 
-                    width: '100%', minHeight: '280px', padding: '1.5rem', borderRadius: '1rem', 
-                    border: '1px solid #fee2e2', background: '#fef2f2', outline: 'none', 
-                    fontSize: '0.85rem', color: '#991b1b', fontWeight: '600', lineHeight: '1.6',
+                    width: '100%', minHeight: '280px', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1rem', 
+                    border: '1px solid rgba(239, 68, 68, 0.15)', background: 'rgba(239, 68, 68, 0.04)', outline: 'none', 
+                    fontSize: '0.85rem', color: '#ff5c5c', fontWeight: '600', lineHeight: '1.6',
                     fontFamily: 'monospace', resize: 'none', boxSizing: 'border-box', opacity: 0.9
                   }}
                 />
@@ -1130,26 +1130,26 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                     Crie, edite ou remova metas personalizadas. O Jarvis se adapta automaticamente a qualquer métrica que você adicionar aqui.
                   </p>
 
-                  <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2rem' }}>
+                  <div style={{ background: 'var(--color-surface-container-low)', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)', marginBottom: '2rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'var(--goals-grid, 2fr 1fr 1fr 1fr auto)', gap: '1rem', alignItems: 'flex-end' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>NOME DA META</label>
-                        <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="Ex: Lucro em 7 dias" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>NOME DA META</label>
+                        <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="Ex: Lucro em 7 dias" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>VALOR ALVO</label>
-                        <input value={newGoalValue} onChange={e => setNewGoalValue(e.target.value)} placeholder="Ex: 5000" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>VALOR ALVO</label>
+                        <input value={newGoalValue} onChange={e => setNewGoalValue(e.target.value)} placeholder="Ex: 5000" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>UNIDADE</label>
-                        <input value={newGoalUnit} onChange={e => setNewGoalUnit(e.target.value)} placeholder="Ex: R$, %, leads" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>UNIDADE</label>
+                        <input value={newGoalUnit} onChange={e => setNewGoalUnit(e.target.value)} placeholder="Ex: R$, %, leads" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b' }}>PERÍODO</label>
-                        <input value={newGoalPeriod} onChange={e => setNewGoalPeriod(e.target.value)} placeholder="Ex: 7 dias, Diário" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#333' }} />
+                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>PERÍODO</label>
+                        <input value={newGoalPeriod} onChange={e => setNewGoalPeriod(e.target.value)} placeholder="Ex: 7 dias, Diário" style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} />
                       </div>
-                      <button onClick={handleAddCustomGoal} style={{ background: '#0EA5E9', color: 'white', border: 'none', padding: '0.85rem', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        <span className="material-icons-outlined">add</span>
+                      <button onClick={handleAddCustomGoal} style={{ background: 'var(--color-primary)', color: 'black', border: 'none', padding: '0.85rem', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '42px' }}>
+                        <span className="material-icons-outlined" style={{ fontSize: '1.2rem', fontWeight: '900' }}>add</span>
                       </button>
                     </div>
                   </div>
@@ -1163,20 +1163,20 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                       </div>
                     ) : (
                       customGoals.map(goal => (
-                        <div key={goal.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '1rem 1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
-                            <div style={{ width: '40px', height: '40px', background: '#E0F2FE', color: '#0369A1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div key={goal.id} className="settings-card-flex" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-surface-container-high)', padding: '1rem 1.5rem', borderRadius: '1rem', border: '1px solid var(--color-outline-variant)', boxShadow: 'var(--shadow-ambient)' }}>
+                          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                            <div style={{ width: '40px', height: '40px', background: 'var(--color-primary-container)', color: 'var(--color-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>ads_click</span>
                             </div>
                             <div>
-                              <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>{goal.name}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Período: {goal.period || 'Geral'}</div>
+                              <div style={{ fontWeight: '800', color: 'var(--color-on-surface)', fontSize: '0.95rem' }}>{goal.name}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)' }}>Período: {goal.period || 'Geral'}</div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '3rem', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                             <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Objetivo</div>
-                              <div style={{ fontWeight: '900', color: '#0EA5E9', fontSize: '1.1rem' }}>{goal.unit === 'R$' ? `R$ ${goal.value}` : `${goal.value}${goal.unit || ''}`}</div>
+                              <div style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>Objetivo</div>
+                              <div style={{ fontWeight: '900', color: 'var(--color-primary)', fontSize: '1.1rem' }}>{goal.unit === 'R$' ? `R$ ${goal.value}` : `${goal.value}${goal.unit || ''}`}</div>
                             </div>
                             <button onClick={() => handleDeleteCustomGoal(goal.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0.5rem' }}>
                               <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>delete_outline</span>
@@ -1192,7 +1192,7 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                 <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Memória de Longo Prazo (Base de Conhecimento)</h3>
                   <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                    Alimente o Jarvis com manuais, scripts de vendas ou tabelas de preços. Ele consultará esses documentos para te dar respostas mais precisas.
+                    Alimente o Jarvis com documentos relevantes (como PDFs ou arquivos de texto) para que ele utilize essas informações em suas análises estratégicas.
                   </p>
 
                   <div style={{ marginBottom: '2rem' }}>
@@ -1201,20 +1201,20 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                       flexDirection: 'column', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      padding: '2rem', 
-                      border: '2px dashed #cbd5e1', 
+                      padding: 'var(--card-padding, 2rem)', 
+                      border: '2px dashed var(--color-outline)', 
                       borderRadius: '1rem', 
                       cursor: 'pointer',
-                      background: uploadingKnowledge ? '#f8fafc' : 'white',
+                      background: uploadingKnowledge ? 'var(--color-surface-container-low)' : 'var(--color-surface)',
                       transition: 'all 0.2s ease'
                     }}>
-                      <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
+                      <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: 'var(--color-on-surface-variant)', marginBottom: '0.5rem' }}>
                         {uploadingKnowledge ? 'sync' : 'cloud_upload'}
                       </span>
-                      <span style={{ fontWeight: '700', color: '#475569' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--color-on-surface)' }}>
                         {uploadingKnowledge ? 'Processando arquivo...' : 'Clique para subir PDF ou TXT'}
                       </span>
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>O Jarvis lerá o conteúdo e guardará na memória</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', marginTop: '0.25rem' }}>O Jarvis lerá o conteúdo e guardará na memória</span>
                       <input type="file" accept=".pdf,.txt" onChange={handleUploadKnowledge} style={{ display: 'none' }} disabled={uploadingKnowledge} />
                     </label>
                   </div>
@@ -1223,20 +1223,20 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                     {loadingKnowledge ? (
                       <p>Carregando memória...</p>
                     ) : knowledgeFiles.length === 0 ? (
-                      <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+                      <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', color: 'var(--color-on-surface-variant)', fontSize: '0.9rem' }}>
                         Nenhum documento na memória.
                       </div>
                     ) : (
                       knowledgeFiles.map(file => (
-                        <div key={file.id} style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
-                          <div style={{ width: '40px', height: '40px', background: '#F1F5F9', color: '#475569', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div key={file.id} style={{ background: 'var(--color-surface-container-high)', padding: '1rem', borderRadius: '0.75rem', border: '1px solid var(--color-outline-variant)', display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
+                          <div style={{ width: '40px', height: '40px', background: 'var(--color-surface)', color: 'var(--color-on-surface-variant)', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span className="material-icons-outlined">{file.fileType.includes('pdf') ? 'description' : 'article'}</span>
                           </div>
                           <div style={{ flex: 1, overflow: 'hidden' }}>
-                            <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.fileName}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Adicionado em {new Date(file.createdAt).toLocaleDateString()}</div>
+                            <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--color-on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.fileName}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-on-surface-variant)' }}>Adicionado em {new Date(file.createdAt).toLocaleDateString()}</div>
                           </div>
-                          <button onClick={() => handleDeleteKnowledge(file.id)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.25rem' }}>
+                          <button onClick={() => handleDeleteKnowledge(file.id)} style={{ background: 'none', border: 'none', color: 'var(--color-on-surface-variant)', cursor: 'pointer', padding: '0.25rem' }}>
                             <span className="material-icons-outlined" style={{ fontSize: '1.1rem' }}>close</span>
                           </button>
                         </div>
@@ -1248,71 +1248,78 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
 
               {/* Seção do Modelo e Voz */}
               <div style={{ display: 'grid', gridTemplateColumns: 'var(--main-grid, 1fr 1fr 1fr)', gap: '1.5rem' }}>
-                <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="settings-card-flex" style={{ background: 'var(--color-surface-container-lowest)', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-on-surface-variant)' }}>
                       <span className="material-icons-outlined">model_training</span>
                     </div>
                     <div>
-                      <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>Modelo de IA</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>GPT-4o (Padrão Ouro)</div>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-on-surface)' }}>Modelo de IA</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)' }}>GPT-4o (Padrão Ouro)</div>
                     </div>
                   </div>
-                  <select 
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    style={{ border: 'none', background: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: '700', outline: 'none', cursor: 'pointer' }}
-                  >
-                    {availableModels.map(model => (
-                      <option key={model} value={model}>{model.toUpperCase()}</option>
-                    ))}
-                  </select>
+                  <div style={{ width: 'var(--mobile-full-width, auto)' }}>
+                    <select 
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      style={{ width: '100%', border: 'none', background: 'var(--color-surface-container-high)', color: 'var(--color-on-surface)', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: '700', outline: 'none', cursor: 'pointer' }}
+                    >
+                      {availableModels.map(model => (
+                        <option key={model} value={model} style={{ background: 'var(--color-surface-dim)' }}>{model.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Motor de Voz */}
-                <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="settings-card-flex" style={{ background: 'var(--color-surface-container-lowest)', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-on-surface-variant)' }}>
                       <span className="material-icons-outlined">record_voice_over</span>
                     </div>
                     <div>
-                      <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>Motor de Voz</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Sua preferência</div>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-on-surface)' }}>Motor de Voz</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)' }}>Sua preferência</div>
                     </div>
                   </div>
-                  <select 
-                    value={voiceEngine}
-                    onChange={(e) => setVoiceEngine(e.target.value)}
-                    style={{ border: 'none', background: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: '700', outline: 'none', cursor: 'pointer' }}
-                  >
-                    <option value="elevenlabs">ElevenLabs (Premium)</option>
-                    <option value="browser">Navegador (Grátis)</option>
-                  </select>
+                  <div style={{ width: 'var(--mobile-full-width, auto)' }}>
+                    <select 
+                      value={voiceEngine}
+                      onChange={(e) => setVoiceEngine(e.target.value)}
+                      style={{ width: '100%', border: 'none', background: 'var(--color-surface-container-high)', color: 'var(--color-on-surface)', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: '700', outline: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="elevenlabs" style={{ background: 'var(--color-surface-dim)' }}>ElevenLabs (Premium)</option>
+                      <option value="browser" style={{ background: 'var(--color-surface-dim)' }}>Navegador (Grátis)</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div style={{ background: 'var(--color-surface-container-lowest)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="settings-card-flex" style={{ background: 'var(--color-surface-container-lowest)', padding: 'var(--card-padding, 1.5rem)', borderRadius: '1.25rem', border: '1px solid var(--color-surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ 
                       width: '40px', height: '40px', borderRadius: '50%', 
-                      background: isAiOperational ? '#F0FDF4' : '#FEF2F2', 
+                      background: isAiOperational ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)', 
                       display: 'flex', alignItems: 'center', justifyContent: 'center', 
                       color: isAiOperational ? '#16A34A' : '#DC2626' 
                     }}>
                       <span className="material-icons-outlined">{isAiOperational ? 'bolt' : 'error_outline'}</span>
                     </div>
                     <div>
-                      <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>Status do Cérebro</div>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-on-surface)' }}>Status do Cérebro</div>
                       <div style={{ fontSize: '0.75rem', color: isAiOperational ? '#16A34A' : '#DC2626' }}>
                         {isAiOperational ? 'Ativo' : 'Faltam Chaves de API'}
                       </div>
                     </div>
                   </div>
-                  <div style={{ 
-                    width: '10px', height: '10px', borderRadius: '50%', 
-                    background: isAiOperational ? '#16A34A' : '#DC2626', 
-                    boxShadow: `0 0 8px ${isAiOperational ? '#16A34A' : '#DC2626'}`,
-                    transition: '0.3s'
-                  }}></div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'var(--mobile-text-align, flex-end)', width: 'var(--mobile-full-width, auto)' }}>
+                    <span style={{ 
+                      width: '10px', height: '10px', borderRadius: '50%', 
+                      background: isAiOperational ? '#16A34A' : '#DC2626', 
+                      boxShadow: `0 0 8px ${isAiOperational ? '#16A34A' : '#DC2626'}`,
+                      transition: '0.3s',
+                      display: 'inline-block'
+                    }}></span>
+                  </div>
                 </div>
               </div>
 
