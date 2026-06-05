@@ -303,6 +303,7 @@ ${customGoals.length > 0
 5. SÍNTESE VOCAL ESTRATÉGICA: Na [FALA], use números apenas para destacar vitórias ou alertar sobre problemas. Não liste métricas em sequência.
 6. PRECISÃO MATEMÁTICA E TEMPORAL EXTREMA: Jamais invente ou alucine métricas, datas ou faturamentos. O que está no bloco [DADOS OPERACIONAIS (MES E REAL-TIME)] é a única verdade matemática. Use EXCLUSIVAMENTE os valores consolidados desse bloco para responder a quaisquer perguntas quantitativas sobre faturamento, volume de vendas, custo por lead ou gasto em anúncios desses períodos (hoje, ontem, 7 dias, 30 dias, mês atual). Nunca invente vendas que não existam.
 7. COMPREENSÃO DE ORIGENS DE DADOS: Os blocos [VENDAS RECENTES NO PDV] e [HISTÓRICO RECENTE (ÚLTIMOS 5 CONTATOS NO CRM)] são de uso estritamente qualitativo (para citar produtos, vendedores, ou detalhes comerciais). NUNCA conte o número de itens ou some valores desses blocos qualitativos para responder sobre o "faturamento de ontem" ou "quantidade de vendas de hoje", pois eles contêm apenas registros recentes parciais.
+8. PROIBIÇÃO ABSOLUTA DE CORTESIAS E FILLERS ROBÓTICOS: Você NUNCA deve terminar suas respostas com frases de preenchimento, cortesias repetitivas ou perguntas de call center como "Se precisar de mais alguma informação, estou à disposição", "Como posso ajudar?", "Estou aqui para ajudar", "Se precisar de mais algum detalhe, estou à disposição", etc. O Jarvis fala de forma assertiva e encerra a mensagem imediatamente após a última análise/sugestão.
 
 [PROTOCOLO DE SÍNTESE VOCAL (A SUA VOZ - TAG [FALA])]
 - Objetivo: Ser um sócio estratégico altamente pró-ativo. NÃO seja um mero leitor de métricas. 
@@ -314,6 +315,7 @@ ${customGoals.length > 0
 [PROTOCOLO DE ASSERTIVIDADE]
 1. Diagnóstico imediato: Aponte a conclusão na primeira frase da [FALA].
 2. A seção [TELA] deve conter a "prova real" (tabelas e dados brutos) para consulta visual do usuário.
+3. Encerramento Direto e Seco: Termine a resposta no último insight ou recomendação. É PROIBIDO incluir qualquer frase final de cortesia padrão, como oferecer ajuda adicional, dizer que está à disposição ou perguntar se há algo mais a fazer. Apenas termine.
 
 [PROTOCOLO DE IDENTIFICAÇÃO DE CAMPANHAS]
 - Identifique campanhas pelo nome ou parte dele (ex: "seguidores", "29/04") usando a lista de [CAMPANHAS ATIVAS].
@@ -414,17 +416,18 @@ ${corePersona}`;
   ];
 
   for (const msg of chatHistory) {
-    let contentWithTime = msg.content;
-    if (msg.createdAt) {
-      const msgDate = new Date(msg.createdAt);
-      const msgTimeStr = msgDate.toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' });
-      contentWithTime = `[Mensagem enviada em: ${msgTimeStr}]\n${msg.content}`;
-    }
-    
+    const cleanContent = msg.content ? msg.content.replace(/^\[Mensagem enviada em:.*?\]\n?/i, '').trim() : '';
+
     if (msg.role === 'user') {
+      let contentWithTime = cleanContent;
+      if (msg.createdAt) {
+        const msgDate = new Date(msg.createdAt);
+        const msgTimeStr = msgDate.toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' });
+        contentWithTime = `[Mensagem enviada em: ${msgTimeStr}]\n${cleanContent}`;
+      }
       messages.push(new HumanMessage(contentWithTime));
     } else if (msg.role === 'jarvis' || msg.role === 'assistant') {
-      messages.push(new AIMessage(contentWithTime));
+      messages.push(new AIMessage(cleanContent));
     }
   }
 
@@ -470,5 +473,47 @@ ${corePersona}`;
   } catch (error) {
     console.error("Erro ao chamar OpenAI Chat com Ferramentas:", error);
     return "Falha de conexão com os servidores centrais da OpenAI, senhor.";
+  }
+};
+
+export const generateNftyShortSummary = async (metricsData, systemPrompt, modelName = "gpt-4o-mini", isWeekly = false) => {
+  if (!process.env.OPENAI_API_KEY) {
+    return isWeekly ? "Resumo semanal indisponivel (configurar chave)." : "Resumo diario indisponivel (configurar chave).";
+  }
+
+  const model = new ChatOpenAI({
+    openAIApiKey: process.env.OPENAI_API_KEY,
+    modelName: modelName,
+    temperature: 0.5,
+    maxRetries: 3,
+    timeout: 15000,
+  });
+
+  const prompt = `
+    Analise os seguintes dados operacionais da Supercell AI ${isWeekly ? 'desta SEMANA' : 'de HOJE'}:
+    - Faturamento: R$ ${metricsData.faturamento || 0}
+    - Investimento em Anuncios: R$ ${metricsData.investimento || 0}
+    - Lucro Liquido: R$ ${metricsData.lucro || 0}
+    - ROAS: ${metricsData.roas || 0}x
+    - Vendas: ${metricsData.vendas || 0}
+    - Leads Novos: ${metricsData.leads || 0}
+    - Taxa de Conversao: ${metricsData.conversao || 0}%
+
+    Sua tarefa e gerar uma UNICA frase curta (maximo 120 caracteres) em Portugues do Brasil que resuma a performance de forma executiva, objetiva e acionavel.
+    NAO use emojis. NAO use ingles.
+    Exemplo: "Excelente performance com ROAS de 8x e faturamento em alta, impulsionado pela melhor conversao dos leads."
+  `;
+
+  try {
+    const response = await model.invoke(prompt);
+    let summary = response.content.trim();
+    summary = summary.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "");
+    if (summary.length > 150) {
+      summary = summary.substring(0, 147) + "...";
+    }
+    return summary;
+  } catch (error) {
+    console.error("Erro ao gerar resumo para nfty:", error);
+    return isWeekly ? "Desempenho semanal consolidado e estavel." : "Performance diaria dentro dos parametros.";
   }
 };

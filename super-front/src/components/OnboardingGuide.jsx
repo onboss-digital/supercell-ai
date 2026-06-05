@@ -58,7 +58,7 @@ function OnboardingGuide() {
     const routes = {
       jarvis: '/settings/jarvis',
       company: '/settings/geral',
-      goals: '/settings/geral',
+      goals: '/settings/jarvis',
       facebook: '/settings/integracoes',
       mercadofone: '/settings/integracoes'
     };
