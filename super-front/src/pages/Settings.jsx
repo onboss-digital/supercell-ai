@@ -54,6 +54,7 @@ function Settings() {
   const [waStatus, setWaStatus] = useState('disconnected');
   const [waQR, setWaQR] = useState('');
   const [waLoading, setWaLoading] = useState(false);
+  const [waError, setWaError] = useState('');
   const [showWAModal, setShowWAModal] = useState(false);
 
   const checkWAStatus = async () => {
@@ -74,6 +75,7 @@ function Settings() {
     if (retryCount === 0) {
       setWaLoading(true);
       setWaQR('');
+      setWaError('');
     }
 
     try {
@@ -96,10 +98,20 @@ function Settings() {
           setWaLoading(false);
           showNotification('info', 'Aguardando Z-API', 'O servidor da Z-API está demorando para responder. Tente novamente em alguns instantes.');
         }
+      } else if (data.status === 'error' || data.error) {
+        setWaLoading(false);
+        setWaStatus('disconnected');
+        setWaError(data.error || 'Não foi possível gerar o QR Code.');
+        showNotification('error', 'Erro na Z-API', data.error || 'Não foi possível gerar o QR Code.');
+      } else {
+        setWaLoading(false);
+        setWaStatus('disconnected');
       }
     } catch (err) {
       console.error('Erro ao gerar QR Code', err);
       setWaLoading(false);
+      setWaStatus('disconnected');
+      setWaError('Não foi possível contatar o servidor da Z-API.');
       showNotification('error', 'Erro de Conexão', 'Não foi possível contatar o servidor da Z-API.');
     }
   };
@@ -121,6 +133,7 @@ function Settings() {
       fetchBMs();
       fetchMercadoStatus();
       checkWAStatus();
+      fetchNftyConfig();
     }
   }, [activeTab]);
 
@@ -144,6 +157,91 @@ function Settings() {
     } catch (err) {
       console.error('Erro ao buscar BMs locais:', err);
     }
+  };
+
+  const fetchNftyConfig = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/settings/nfty`);
+      if (res.ok) {
+        const data = await res.json();
+        setNftyTopic(data.topic || '');
+        setNftyUrl(data.url || 'https://ntfy.sh');
+        setNftyEnabled(data.enabled);
+        setNftyDailyTime(data.dailyReportTime || '19:00');
+      }
+    } catch (err) {
+      console.error('Erro ao buscar configuracao do nfty:', err);
+    }
+  };
+
+  const handleSaveNfty = async () => {
+    if (!nftyTopic) {
+      showNotification('error', 'Campo Obrigatorio', 'Por favor, informe o topico do nfty para receber as notificacoes.');
+      return;
+    }
+    setSavingNfty(true);
+    try {
+      const res = await fetch(`${API_URL}/api/settings/nfty`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: nftyTopic,
+          url: nftyUrl,
+          enabled: nftyEnabled,
+          dailyReportTime: nftyDailyTime
+        })
+      });
+      if (res.ok) {
+        showNotification('success', 'Configuracoes Salvas', 'As notificacoes push do nfty foram configuradas com sucesso.');
+        fetchNftyConfig();
+      } else {
+        showNotification('error', 'Falha ao Salvar', 'Nao foi possivel atualizar as configuracoes de push.');
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('error', 'Erro de Conexao', 'Erro ao se comunicar com o servidor.');
+    }
+    setSavingNfty(false);
+  };
+
+  const handleTestNfty = async (type = 'daily') => {
+    if (!nftyTopic) {
+      showNotification('error', 'Topico Ausente', 'Configure e salve o topico do nfty antes de testar.');
+      return;
+    }
+    if (type === 'daily') setTestingDailyNfty(true);
+    else if (type === 'weekly') setTestingWeeklyNfty(true);
+    else if (type === 'lunch') setTestingLunchNfty(true);
+    else if (type === 'cpa') setTestingCpaNfty(true);
+
+    try {
+      let endpoint = '';
+      if (type === 'daily') endpoint = 'test-daily';
+      else if (type === 'weekly') endpoint = 'test-weekly';
+      else if (type === 'lunch') endpoint = 'test-lunch';
+      else if (type === 'cpa') endpoint = 'test-cpa';
+
+      const res = await fetch(`${API_URL}/api/settings/nfty/${endpoint}`, { method: 'POST' });
+      if (res.ok) {
+        let msg = '';
+        if (type === 'daily') msg = 'Notificacao push de teste diario enviada.';
+        else if (type === 'weekly') msg = 'Notificacao push de teste semanal enviada.';
+        else if (type === 'lunch') msg = 'Notificacao push de parcial do almoco enviada.';
+        else if (type === 'cpa') msg = 'Notificacao de alerta de CPA enviada.';
+        showNotification('success', 'Disparo de Teste', msg);
+      } else {
+        const data = await res.json();
+        showNotification('error', 'Falha no Teste', data.error || 'Erro ao enviar notificacao de teste.');
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('error', 'Erro de Teste', 'Ocorreu um erro ao disparar a notificacao push de teste.');
+    }
+    
+    if (type === 'daily') setTestingDailyNfty(false);
+    else if (type === 'weekly') setTestingWeeklyNfty(false);
+    else if (type === 'lunch') setTestingLunchNfty(false);
+    else if (type === 'cpa') setTestingCpaNfty(false);
   };
 
   const handleSyncBM = async () => {
@@ -238,6 +336,17 @@ function Settings() {
   const [loadingKnowledge, setLoadingKnowledge] = useState(false);
   const [uploadingKnowledge, setUploadingKnowledge] = useState(false);
 
+  // Estados para nfty
+  const [nftyTopic, setNftyTopic] = useState('');
+  const [nftyUrl, setNftyUrl] = useState('https://ntfy.sh');
+  const [nftyEnabled, setNftyEnabled] = useState(true);
+  const [nftyDailyTime, setNftyDailyTime] = useState('19:00');
+  const [savingNfty, setSavingNfty] = useState(false);
+  const [testingDailyNfty, setTestingDailyNfty] = useState(false);
+  const [testingWeeklyNfty, setTestingWeeklyNfty] = useState(false);
+  const [testingLunchNfty, setTestingLunchNfty] = useState(false);
+  const [testingCpaNfty, setTestingCpaNfty] = useState(false);
+
   // Sistema de Notificações Inteligentes
   const [notification, setNotification] = useState({ show: false, type: 'success', title: '', message: '' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -260,6 +369,7 @@ function Settings() {
     if (activeTab === 'Integrações') {
       fetchBMs();
       fetchMercadoStatus();
+      fetchNftyConfig();
     } else if (activeTab === 'Geral') {
       fetchCompanyProfile();
     } else if (activeTab === 'Equipe') {
@@ -950,6 +1060,175 @@ function Settings() {
                 </div>
               ))}
             </div>
+
+            {/* SEÇÃO NOTIFICAÇÕES PUSH (NFTY) */}
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '4rem', marginBottom: '0.5rem' }}>
+              Notificacoes Push (ntfy.sh)
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-on-surface-variant)', marginBottom: '1.5rem' }}>
+              Configure o canal de comunicacao do nfty.sh para receber relatorios diarios e semanais de performance direto no seu dispositivo celular ou computador.
+            </p>
+
+            <div style={{
+              background: 'var(--color-surface-container-lowest)',
+              borderRadius: '1rem',
+              border: '1px solid var(--color-surface-container-low)',
+              padding: '2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              marginBottom: '2rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6' }}>
+                    <span className="material-icons-outlined">notifications_active</span>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '800', color: 'var(--color-on-surface)' }}>Status do Canal</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', marginTop: '0.2rem' }}>
+                      {nftyEnabled ? `Recebendo relatorios automaticos as ${nftyDailyTime} (Rio Branco)` : 'Relatorios automaticos desativados'}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={nftyEnabled} 
+                      onChange={(e) => setNftyEnabled(e.target.checked)}
+                      style={{ width: '20px', height: '20px', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                    <span style={{ marginLeft: '0.5rem', fontWeight: '700', fontSize: '0.85rem', color: 'var(--color-on-surface)' }}>Ativo</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>SERVIDOR NFTY</label>
+                  <input 
+                    value={nftyUrl}
+                    onChange={e => setNftyUrl(e.target.value)}
+                    placeholder="https://ntfy.sh"
+                    style={{ padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-surface-container-low)', background: 'var(--color-surface-container-lowest)', color: 'var(--color-on-surface)', outline: 'none', fontWeight: '600' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>TOPICO DO CANAL</label>
+                  <input 
+                    value={nftyTopic}
+                    onChange={e => setNftyTopic(e.target.value)}
+                    placeholder="Ex: supercell_relatorio_seguro"
+                    style={{ padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-surface-container-low)', background: 'var(--color-surface-container-lowest)', color: 'var(--color-on-surface)', outline: 'none', fontWeight: '600' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>HORARIO DE ENVIO (FUSO RIO BRANCO)</label>
+                  <input 
+                    type="text"
+                    value={nftyDailyTime}
+                    onChange={e => setNftyDailyTime(e.target.value)}
+                    placeholder="19:00"
+                    style={{ padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-surface-container-low)', background: 'var(--color-surface-container-lowest)', color: 'var(--color-on-surface)', outline: 'none', fontWeight: '600' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
+                  <button 
+                    onClick={handleSaveNfty}
+                    disabled={savingNfty}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1rem',
+                      borderRadius: '0.5rem',
+                      background: 'var(--color-primary)',
+                      color: 'black',
+                      border: 'none',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      height: '42px',
+                      opacity: savingNfty ? 0.7 : 1
+                    }}
+                  >
+                    {savingNfty ? 'Salvando...' : 'Salvar Canal'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--color-surface-container-low)', paddingTop: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                <button 
+                  onClick={() => handleTestNfty('daily')}
+                  disabled={testingDailyNfty}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '0.5rem',
+                    background: 'transparent',
+                    border: '1px solid #3B82F6',
+                    color: '#3B82F6',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: testingDailyNfty ? 0.7 : 1
+                  }}
+                >
+                  {testingDailyNfty ? 'Enviando...' : 'Testar Envio Diario'}
+                </button>
+                <button 
+                  onClick={() => handleTestNfty('weekly')}
+                  disabled={testingWeeklyNfty}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '0.5rem',
+                    background: 'transparent',
+                    border: '1px solid #10B981',
+                    color: '#10B981',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: testingWeeklyNfty ? 0.7 : 1
+                  }}
+                >
+                  {testingWeeklyNfty ? 'Enviando...' : 'Testar Envio Semanal'}
+                </button>
+                <button 
+                  onClick={() => handleTestNfty('lunch')}
+                  disabled={testingLunchNfty}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '0.5rem',
+                    background: 'transparent',
+                    border: '1px solid #8B5CF6',
+                    color: '#8B5CF6',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: testingLunchNfty ? 0.7 : 1
+                  }}
+                >
+                  {testingLunchNfty ? 'Enviando...' : 'Testar Parcial Almoco'}
+                </button>
+                <button 
+                  onClick={() => handleTestNfty('cpa')}
+                  disabled={testingCpaNfty}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '0.5rem',
+                    background: 'transparent',
+                    border: '1px solid #EF4444',
+                    color: '#EF4444',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: testingCpaNfty ? 0.7 : 1
+                  }}
+                >
+                  {testingCpaNfty ? 'Enviando...' : 'Testar Alerta CPA'}
+                </button>
+              </div>
+            </div>
             
           </div>
         );
@@ -1123,6 +1402,35 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                     fontFamily: 'monospace', resize: 'none', boxSizing: 'border-box', opacity: 0.9
                   }}
                 />
+
+                <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Metas Operacionais Diárias</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                    Defina as metas básicas que guiam o faturamento e tráfego diário da empresa.
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>META DE VENDAS DIÁRIA (R$)</label>
+                      <input 
+                        type="number" 
+                        value={dailySalesGoal} 
+                        onChange={e => setDailySalesGoal(e.target.value)} 
+                        placeholder="Ex: 5000" 
+                        style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} 
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-on-surface-variant)' }}>META DE LEADS DIÁRIA</label>
+                      <input 
+                        type="number" 
+                        value={dailyLeadsGoal} 
+                        onChange={e => setDailyLeadsGoal(e.target.value)} 
+                        placeholder="Ex: 50" 
+                        style={{ padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--color-outline-variant)', background: 'var(--color-surface)', color: 'var(--color-on-surface)', outline: 'none' }} 
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--color-on-surface)' }}>Fábrica de Metas Dinâmicas</h3>
@@ -1638,10 +1946,21 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
                   <div style={{ width: '250px', height: '250px', background: '#f8fafc', borderRadius: '1.5rem', margin: '0 auto', border: '2px dashed #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
                     {waQR ? (
                       <img src={waQR} alt="WhatsApp QR Code" style={{ width: '100%', height: '100%', padding: '1rem' }} />
-                    ) : (
+                    ) : waLoading ? (
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #25D366', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>
-                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800' }}>{waStatus === 'connected' ? 'CONECTADO!' : 'SINCRONIZANDO...'}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800' }}>SINCRONIZANDO...</span>
+                      </div>
+                    ) : waError ? (
+                      <div style={{ textAlign: 'center', padding: '1rem' }}>
+                        <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#ef4444', marginBottom: '0.5rem' }}>error_outline</span>
+                        <p style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: '800', margin: 0 }}>FALHA NA CONEXÃO</p>
+                        <p style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '0.25rem', lineHeight: '1.2' }}>{waError}</p>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '1rem' }}>
+                        <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#64748b', marginBottom: '0.5rem' }}>qr_code_2</span>
+                        <p style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800', margin: 0 }}>QR CODE NÃO GERADO</p>
                       </div>
                     )}
                   </div>

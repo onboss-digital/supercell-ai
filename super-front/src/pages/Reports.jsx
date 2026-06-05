@@ -81,6 +81,15 @@ function Reports() {
   
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [metaStatus, setMetaStatus] = useState({ ok: true, msg: 'LINK_ATIVO' });
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Carregar histórico real do banco de dados (Memória Permanente)
   useEffect(() => {
@@ -227,6 +236,8 @@ function Reports() {
   const currentAudioRef = useRef(null);
   const messagesRef = useRef(messages);
   const introMusicRef = useRef(null);
+  const falaPreventivaTocandoRef = useRef(false);
+  const pendingResponseCallbackRef = useRef(null);
 
   const [audioLevels, setAudioLevels] = useState(new Array(20).fill(0));
   const analyserRef = useRef(null);
@@ -410,28 +421,40 @@ function Reports() {
       ];
       const fraseAleatoria = frasesTransicao[Math.floor(Math.random() * frasesTransicao.length)];
       
+      falaPreventivaTocandoRef.current = true;
+      pendingResponseCallbackRef.current = null;
+
+      const handlePreventivaEnd = () => {
+        console.log('🔄 [JARVIS] Evento de término de fala preventiva disparado.');
+        falaPreventivaTocandoRef.current = false;
+        if (pendingResponseCallbackRef.current) {
+          console.log('🔄 [JARVIS] Executando callback de resposta pendente.');
+          pendingResponseCallbackRef.current();
+          pendingResponseCallbackRef.current = null;
+        }
+      };
+
       if (voicePreference === 'browser') {
         console.log('⚡ [JARVIS] Fala preventiva acionada (Nativa):', fraseAleatoria);
         const utterance = new SpeechSynthesisUtterance(fraseAleatoria);
         utterance.lang = 'pt-BR';
         utterance.rate = 1.05; 
         utterance.pitch = 1.0;
-        
         const voices = window.speechSynthesis.getVoices();
         const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
         if (googlePt) utterance.voice = googlePt;
-        
+        utterance.onend = handlePreventivaEnd;
+        utterance.onerror = handlePreventivaEnd;
         window.speechSynthesis.speak(utterance);
       } else {
-        console.log('⚡ [JARVIS] Fala preventiva acionada (ElevenLabs):', fraseAleatoria);
+        console.log('⚡ [JARVIS] Fala preventiva acionada (API ElevenLabs):', fraseAleatoria);
         const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(fraseAleatoria)}`;
         const transicaoAudio = new Audio(transicaoUrl);
         currentAudioRef.current = transicaoAudio;
+        transicaoAudio.onended = handlePreventivaEnd;
         transicaoAudio.play().catch(e => {
-          console.warn("⚠️ [JARVIS] Falha na fala preventiva via ElevenLabs, usando fallback do navegador:", e);
-          const utterance = new SpeechSynthesisUtterance(fraseAleatoria);
-          utterance.lang = 'pt-BR';
-          window.speechSynthesis.speak(utterance);
+          console.error("❌ [JARVIS] Erro ao reproduzir fala preventiva via API", e);
+          handlePreventivaEnd();
         });
       }
     }
@@ -444,104 +467,105 @@ function Reports() {
       });
       const data = await res.json();
       
-      // Parar qualquer áudio preventivo (ElevenLabs) ou fala nativa do navegador que esteja tocando
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-      }
-      window.speechSynthesis.cancel();
-      
-      let replyText = data.reply;
-      
-      if (!replyText) {
-        const errTitle = data.error || 'Erro na central de processamento';
-        const errSuggestion = data.suggestion ? `\n\nSugestão: ${data.suggestion}` : '';
-        replyText = `> ${errTitle}${errSuggestion}`;
-      }
-
-      const transicaoMatch = replyText.match(/\[TRANSICAO\]([\s\S]*?)\[/i) || replyText.match(/\[TRANSICAO\]([\s\S]*)$/i);
-      const falaMatch = replyText.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|$)/i);
-      const telaMatch = replyText.match(/\[TELA\]([\s\S]*)/i);
-
-      let transicaoText = transicaoMatch ? transicaoMatch[1].trim() : null;
-      let spokenText = falaMatch ? falaMatch[1].trim() : replyText;
-      let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
-
-      const respTime = new Date();
-      const respDateStr = respTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      const respTimeStr = `${respTime.getHours().toString().padStart(2, '0')}:${respTime.getMinutes().toString().padStart(2, '0')}:${respTime.getSeconds().toString().padStart(2, '0')}`;
-      const respFinalTimeStr = `${respDateStr} às ${respTimeStr}`;
-      
-      setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: respFinalTimeStr, animate: true }]);
-      setSystemState("SIS.RESP");
-
-      const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';
-
-      const playBrowserFallback = (text, isTransition = false) => {
-        console.log('🌐 [JARVIS] Usando voz nativa do navegador...');
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+      const processResponse = () => {
+        let replyText = data.reply;
         
-        // Tenta encontrar uma voz masculina/executiva se disponível
-        const voices = window.speechSynthesis.getVoices();
-        const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
-        if (googlePt) utterance.voice = googlePt;
-
-        utterance.onend = () => {
-          if (isTransition) {
-            console.log('🔄 [JARVIS] Transição nativa concluída.');
-            setTimeout(playMainFala, 500);
-          } else {
-            console.log('✅ [JARVIS] Fala nativa concluída.');
-            setSystemState("SIS.AGUARDA");
-          }
-        };
-
-        window.speechSynthesis.speak(utterance);
-      };
-
-      const playMainFala = () => {
-        if (voicePreference === 'browser') {
-          playBrowserFallback(spokenText);
-          return;
+        if (!replyText) {
+          const errTitle = data.error || 'Erro na central de processamento';
+          const errSuggestion = data.suggestion ? `\n\nSugestão: ${data.suggestion}` : '';
+          replyText = `> ${errTitle}${errSuggestion}`;
         }
-        console.log('🔊 [JARVIS] Tentando falar via API:', spokenText);
-        const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
-        audio.onended = () => {
-          console.log('✅ [JARVIS] Fala da API concluída.');
-          setSystemState("SIS.AGUARDA");
-        };
-        audio.play().then(() => {
-          console.log('▶️ [JARVIS] Reproduzindo áudio da API...');
-        }).catch(e => {
-          console.warn("⚠️ [JARVIS] Falha na API (possivelmente créditos), mudando para voz nativa...");
-          playBrowserFallback(spokenText);
-        });
-      };
 
-      if (transicaoText) {
-        if (voicePreference === 'browser') {
-          playBrowserFallback(transicaoText, true);
-        } else {
-          console.log('📡 [JARVIS] Tocando transição:', transicaoText);
-          const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(transicaoText)}`;
-          const transicaoAudio = new Audio(transicaoUrl);
-          currentAudioRef.current = transicaoAudio;
-          transicaoAudio.onended = () => {
-            console.log('🔄 [JARVIS] Transição concluída, iniciando fala principal...');
-            setTimeout(playMainFala, 500);
+        const transicaoMatch = replyText.match(/\[TRANSICAO\]([\s\S]*?)\[/i) || replyText.match(/\[TRANSICAO\]([\s\S]*)$/i);
+        const falaMatch = replyText.match(/\[FALA\]([\s\S]*?)(?:\[TELA\]|$)/i);
+        const telaMatch = replyText.match(/\[TELA\]([\s\S]*)/i);
+
+        let transicaoText = transicaoMatch ? transicaoMatch[1].trim() : null;
+        let spokenText = falaMatch ? falaMatch[1].trim() : replyText;
+        let displayText = falaMatch ? `> ${spokenText}\n\n${telaMatch ? telaMatch[1].trim() : ''}` : replyText;
+
+        const respTime = new Date();
+        const respDateStr = respTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const respTimeStr = `${respTime.getHours().toString().padStart(2, '0')}:${respTime.getMinutes().toString().padStart(2, '0')}:${respTime.getSeconds().toString().padStart(2, '0')}`;
+        const respFinalTimeStr = `${respDateStr} às ${respTimeStr}`;
+        
+        setMessages(prev => [...prev, { role: 'jarvis', content: displayText, time: respFinalTimeStr, animate: true }]);
+        setSystemState("SIS.RESP");
+
+        const voicePreference = localStorage.getItem('jarvisVoice') || 'elevenlabs';
+
+        const playBrowserFallback = (text, isTransition = false) => {
+          console.log('🌐 [JARVIS] Usando voz nativa do navegador...');
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'pt-BR';
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          
+          const voices = window.speechSynthesis.getVoices();
+          const googlePt = voices.find(v => v.name.includes('Google') && v.lang === 'pt-BR');
+          if (googlePt) utterance.voice = googlePt;
+
+          utterance.onend = () => {
+            if (isTransition) {
+              console.log('🔄 [JARVIS] Transição nativa concluída.');
+              setTimeout(playMainFala, 500);
+            } else {
+              console.log('✅ [JARVIS] Fala nativa concluída.');
+              setSystemState("SIS.AGUARDA");
+            }
           };
-          transicaoAudio.play().catch(e => {
-            console.error("❌ [JARVIS] Erro ao tocar áudio de transição:", e);
-            playMainFala();
+
+          window.speechSynthesis.speak(utterance);
+        };
+
+        const playMainFala = () => {
+          if (voicePreference === 'browser') {
+            playBrowserFallback(spokenText);
+            return;
+          }
+          console.log('🔊 [JARVIS] Tentando falar via API:', spokenText);
+          const audioUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(spokenText)}`;
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+          audio.onended = () => {
+            console.log('✅ [JARVIS] Fala da API concluída.');
+            setSystemState("SIS.AGUARDA");
+          };
+          audio.play().then(() => {
+            console.log('▶️ [JARVIS] Reproduzindo áudio da API...');
+          }).catch(e => {
+            console.warn("⚠️ [JARVIS] Falha na API (possivelmente créditos), mudando para voz nativa...");
+            playBrowserFallback(spokenText);
           });
+        };
+
+        if (transicaoText) {
+          if (voicePreference === 'browser') {
+            playBrowserFallback(transicaoText, true);
+          } else {
+            console.log('📡 [JARVIS] Tocando transição:', transicaoText);
+            const transicaoUrl = `${API_URL}/api/jarvis/speak?text=${encodeURIComponent(transicaoText)}`;
+            const transicaoAudio = new Audio(transicaoUrl);
+            currentAudioRef.current = transicaoAudio;
+            transicaoAudio.onended = () => {
+              console.log('🔄 [JARVIS] Transição concluída, iniciando fala principal...');
+              setTimeout(playMainFala, 500);
+            };
+            transicaoAudio.play().catch(e => {
+              console.error("❌ [JARVIS] Erro ao tocar áudio de transição:", e);
+              playMainFala();
+            });
+          }
+        } else {
+          playMainFala();
         }
+      };
+
+      if (falaPreventivaTocandoRef.current) {
+        console.log('⏳ [JARVIS] Fala preventiva em andamento. Resposta agendada.');
+        pendingResponseCallbackRef.current = processResponse;
       } else {
-        playMainFala();
+        processResponse();
       }
     } catch (err) {
       console.error(err);
@@ -617,96 +641,110 @@ function Reports() {
     setAudioLevels(new Array(20).fill(0));
   };
 
-  const toggleRecording = async () => {
-    if (isRecordingRef.current) {
-      playBeep('stop');
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecording(false);
-      setSystemState("SIS.PROC");
-      stopVisualizer();
+  const startRecording = async () => {
+    if (isRecordingRef.current) return;
+    
+    playBeep('start');
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      startVisualizer(stream);
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    } else {
-      playBeep('start');
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-      }
-      
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        startVisualizer(stream);
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
 
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunksRef.current.push(e.data);
-        };
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.webm');
 
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const formData = new FormData();
-          formData.append('audio', audioBlob, 'audio.webm');
-
-          try {
-            const res = await fetch(`${API_URL}/api/jarvis/transcribe`, {
-              method: 'POST',
-              body: formData
-            });
-            const data = await res.json();
-            
-            if (data.text) {
-              sendMessageToJarvis(data.text);
-              setInputText("");
-            } else {
-              setSystemState("SIS.AGUARDA");
-            }
-          } catch (err) {
-            console.error("Erro na transcrição", err);
+        try {
+          const res = await fetch(`${API_URL}/api/jarvis/transcribe`, {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          
+          if (data.text) {
+            sendMessageToJarvis(data.text);
+            setInputText("");
+          } else {
             setSystemState("SIS.AGUARDA");
           }
-          
-          stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+          console.error("Erro na transcrição", err);
+          setSystemState("SIS.AGUARDA");
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      // SpeechRecognition em tempo real
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onresult = (event) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              // Whisper fará a versão final
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          if (interimTranscript) {
+            setInputText(interimTranscript);
+          }
         };
 
-        // INÍCIO DO RECONHECIMENTO EM TEMPO REAL PARA FEEDBACK VISUAL
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          const recognition = new SpeechRecognition();
-          recognition.lang = 'pt-BR';
-          recognition.continuous = true;
-          recognition.interimResults = true;
-
-          recognition.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              if (event.results[i].isFinal) {
-                // Ao final, o Whisper substituirá pelo texto mais preciso
-              } else {
-                interimTranscript += event.results[i][0].transcript;
-              }
-            }
-            if (interimTranscript) {
-              setInputText(interimTranscript);
-            }
-          };
-
-          recognition.start();
-          recognitionRef.current = recognition;
-        }
-
-        mediaRecorder.start();
-        setIsRecording(true);
-        setSystemState("USER.RECV");
-      } catch (err) {
-        console.error("Erro ao acessar microfone", err);
-        alert("Permita o acesso ao microfone no navegador.");
+        recognition.start();
+        recognitionRef.current = recognition;
       }
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setSystemState("USER.RECV");
+    } catch (err) {
+      console.error("Erro ao acessar microfone", err);
+      alert("Permita o acesso ao microfone no navegador.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (!isRecordingRef.current) return;
+    
+    playBeep('stop');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    isRecordingRef.current = false;
+    setSystemState("SIS.PROC");
+    stopVisualizer();
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecordingRef.current) {
+      stopRecording();
+    } else {
+      startRecording();
     }
   };
 
@@ -715,14 +753,14 @@ function Reports() {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
-        if (!isRecordingRef.current) toggleRecording();
+        startRecording();
       }
     };
     const handleKeyUp = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.code === 'Space') {
         e.preventDefault();
-        if (isRecordingRef.current) toggleRecording();
+        stopRecording();
       }
     };
     
@@ -861,7 +899,8 @@ function Reports() {
       `}</style>
       
         {/* Interface Exclusiva para Desktop */}
-        <div className="desktop-only h-full w-full">
+        {!isMobile && (
+          <div className="desktop-only h-full w-full">
           <div className="dark flex flex-col font-code-sm text-on-surface relative overflow-hidden h-full w-full" 
                style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-primary)' }}>
             
@@ -1062,9 +1101,13 @@ function Reports() {
                 
                 <button 
                   type="button"
-                  onClick={toggleRecording}
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onMouseLeave={stopRecording}
+                  onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
                   className={`w-12 h-12 flex items-center justify-center transition-all border cursor-pointer ${isRecording ? 'border-red-500/50 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/60 hover:shadow-[0_0_12px_rgba(76,214,251,0.3)]'}`}
-                  title="Comando de Voz"
+                  title="Comando de Voz (Segure para gravar)"
                 >
                   <span className="material-icons-outlined text-[20px]">
                     {isRecording ? 'mic_off' : 'mic'}
@@ -1084,9 +1127,11 @@ function Reports() {
 
           </div>
         </div>
+      )}
 
         {/* Interface Exclusiva para Mobile */}
-        <div className="mobile-only reports-mobile-layout">
+        {isMobile && (
+          <div className="mobile-only reports-mobile-layout">
           <div className="jarvis-mobile-wrapper">
             {/* Header Móvel */}
             <header className="flex justify-between items-center px-4 h-12 shrink-0 bg-surface border-b border-primary/20 z-10 relative">
@@ -1194,8 +1239,7 @@ function Reports() {
                 <button 
                   type="button"
                   onClick={() => setIsMobileChatExpanded(!isMobileChatExpanded)}
-                  className="jarvis-mobile-btn jarvis-mobile-btn-mic"
-                  style={{ marginRight: '0.5rem', background: isMobileChatExpanded ? 'rgba(0, 245, 255, 0.15)' : 'transparent' }}
+                  className={`jarvis-mobile-btn jarvis-mobile-btn-toggle ${isMobileChatExpanded ? 'active' : ''}`}
                   title="Expandir Histórico"
                 >
                   <span className="material-icons-outlined">
@@ -1213,9 +1257,13 @@ function Reports() {
 
                 <button 
                   type="button"
-                  onClick={toggleRecording}
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onMouseLeave={stopRecording}
+                  onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
                   className={`jarvis-mobile-btn jarvis-mobile-btn-mic ${isRecording ? 'recording' : ''}`}
-                  title="Comando de Voz"
+                  title="Comando de Voz (Segure para gravar)"
                 >
                   <span className="material-icons-outlined">
                     {isRecording ? 'mic_off' : 'mic'}
@@ -1233,6 +1281,7 @@ function Reports() {
             </div>
           </div>
         </div>
+      )}
       
       {/* MODO CINEMÁTICO (JARVIS PROTOCOL) */}
       {isCinematic && (

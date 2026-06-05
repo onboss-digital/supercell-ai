@@ -5,7 +5,11 @@ import jarvisImg from '../assets/jarvis-foto.jpg';
 
 const GlobalHeader = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
   const dropdownRef = useRef(null);
+  const notificationsDropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -14,6 +18,9 @@ const GlobalHeader = () => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsProfileOpen(false);
+      }
+      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target)) {
+        setIsNotificationsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -81,9 +88,73 @@ const GlobalHeader = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/notifications`);
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar notificações:', e);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/notifications/read-all`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        fetchNotifications();
+      }
+    } catch (e) {
+      console.error('Erro ao limpar notificações:', e);
+    }
+  };
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/api/notifications/${id}/read`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      }
+    } catch (e) {
+      console.error('Erro ao marcar notificação como lida:', e);
+    }
+  };
+
+  const getIcon = (type) => {
+    switch (type) {
+      case 'venda': return 'monetization_on';
+      case 'lead': return 'person_add';
+      case 'sistema': return 'warning';
+      case 'meta': return 'emoji_events';
+      default: return 'notifications';
+    }
+  };
+
+  const formatTimeAgo = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Agora mesmo';
+    if (diffMins < 60) return `Há ${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `Há ${diffHours}h`;
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   useEffect(() => {
     fetchCompanyProfile();
     updateDateTimeAndWeather();
+    fetchNotifications();
+    
+    // Polling a cada 30 segundos
+    const notifTimer = setInterval(fetchNotifications, 30000);
     
     // Atualiza o relógio a cada minuto
     const timer = setInterval(updateDateTimeAndWeather, 60000);
@@ -92,6 +163,7 @@ const GlobalHeader = () => {
     return () => {
       window.removeEventListener('companyProfileUpdated', fetchCompanyProfile);
       clearInterval(timer);
+      clearInterval(notifTimer);
     };
   }, []);
 
@@ -112,10 +184,55 @@ const GlobalHeader = () => {
       </div>
 
       <div className="header-actions">
-        <button className="header-icon-btn">
-          <span className="material-icons-outlined">notifications</span>
-          <span className="notification-badge"></span>
-        </button>
+        <div className="notifications-dropdown-container" ref={notificationsDropdownRef}>
+          <button className="header-icon-btn" onClick={() => { setIsNotificationsOpen(!isNotificationsOpen); fetchNotifications(); }}>
+            <span className="material-icons-outlined">notifications</span>
+            {notifications.some(n => !n.read) && <span className="notification-badge"></span>}
+          </button>
+          
+          {isNotificationsOpen && (
+            <div className="notifications-dropdown">
+              <div className="notifications-header">
+                <h3>CENTRAL DE ALERTAS</h3>
+                {notifications.length > 0 && (
+                  <button className="notifications-clear-btn" onClick={handleClearAll}>
+                    <span className="material-icons-outlined" style={{ fontSize: '0.9rem' }}>done_all</span>
+                    LIMPAR TUDO
+                  </button>
+                )}
+              </div>
+              
+              <div className="notifications-list">
+                {notifications.length === 0 ? (
+                  <div className="notifications-empty">
+                    <span className="material-icons-outlined">notifications_off</span>
+                    <span>Sem novas notificações</span>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div 
+                      key={notif.id} 
+                      className={`notifications-item type-${notif.type} ${!notif.read ? 'unread' : ''}`}
+                      onClick={() => handleMarkAsRead(notif.id)}
+                    >
+                      <div className="notification-icon-container">
+                        <span className="material-icons-outlined notification-icon">
+                          {getIcon(notif.type)}
+                        </span>
+                      </div>
+                      <div className="notification-content">
+                        <span className="notification-title">{notif.title}</span>
+                        <p className="notification-message">{notif.message}</p>
+                        <span className="notification-time">{formatTimeAgo(notif.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button className="header-icon-btn" onClick={() => navigate('/settings')}>
           <span className="material-icons-outlined">settings</span>
         </button>

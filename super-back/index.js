@@ -8,7 +8,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { generateAiInsights, generateJarvisChatResponse } from './aiService.js';
+import { generateAiInsights, generateJarvisChatResponse, generateNftyShortSummary } from './aiService.js';
 import { calcularLucroReal } from './product_costs.js';
 import cron from 'node-cron';
 import multer from 'multer';
@@ -76,7 +76,7 @@ const PORT = process.env.PORT || 3005;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: false
+  ssl: { rejectUnauthorized: false }
 });
 
 const prisma = new PrismaClient();
@@ -211,16 +211,25 @@ const initDb = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS "CustomTemplate" (
+      CREATE TABLE IF NOT EXISTS "Notification" (
+        "id" SERIAL PRIMARY KEY,
+        "type" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "read" BOOLEAN DEFAULT false,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS "NotificationConfig" (
         "id" TEXT PRIMARY KEY,
-        "name" TEXT NOT NULL,
-        "metricIds" JSONB,
-        "funnelIds" JSONB,
-        "icon" TEXT DEFAULT 'auto_awesome',
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "topic" TEXT NOT NULL,
+        "url" TEXT DEFAULT 'https://ntfy.sh',
+        "enabled" BOOLEAN DEFAULT true,
+        "dailyReportTime" TEXT DEFAULT '19:00',
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query('INSERT INTO "NotificationConfig" (id, topic, url, enabled, "dailyReportTime") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING', ['default', 'supercell_performance_report', 'https://ntfy.sh', true, '19:00']);
 
     console.log('✅ Banco de Dados Preparado.');
   } catch (err) {
@@ -228,6 +237,56 @@ const initDb = async () => {
   }
 };
 initDb();
+
+export async function createNotification(type, title, message) {
+  try {
+    await pool.query(
+      'INSERT INTO "Notification" (type, title, message) VALUES ($1, $2, $3)',
+      [type, title, message]
+    );
+    console.log(`[NOTIFICACAO INTERNA] Tipo: ${type} | Titulo: ${title}`);
+  } catch (err) {
+    console.error('Erro ao criar notificacao interna:', err);
+  }
+}
+
+export async function checkGoalsProgress(type) {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const goalRes = await pool.query('SELECT "dailySalesGoal", "dailyLeadsGoal" FROM "SalesGoal" WHERE id = $1', ['default']);
+    if (goalRes.rows.length === 0) return;
+
+    const { dailySalesGoal, dailyLeadsGoal } = goalRes.rows[0];
+
+    if (type === 'venda' && dailySalesGoal > 0) {
+      const salesCountRes = await pool.query('SELECT COUNT(*) FROM "Sale" WHERE "createdAt"::date = $1', [today]);
+      const salesCount = parseInt(salesCountRes.rows[0].count);
+
+      if (salesCount === dailySalesGoal) {
+        await createNotification(
+          'meta',
+          'Meta de Vendas Atingida',
+          `Parabens! A meta diaria de ${dailySalesGoal} vendas foi atingida hoje.`
+        );
+      }
+    }
+
+    if (type === 'lead' && dailyLeadsGoal > 0) {
+      const leadsCountRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt"::date = $1', [today]);
+      const leadsCount = parseInt(leadsCountRes.rows[0].count);
+
+      if (leadsCount === dailyLeadsGoal) {
+        await createNotification(
+          'meta',
+          'Meta de Leads Atingida',
+          `Parabens! A meta diaria de ${dailyLeadsGoal} leads foi atingida hoje.`
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao verificar progresso das metas:', err);
+  }
+}
 
 export async function syncMercadoPhoneSales(limit = 100) {
   const API_URL = process.env.MERCADOPHONE_API_URL;
@@ -281,6 +340,15 @@ export async function syncMercadoPhoneSales(limit = 100) {
           [sale.id, telefone, nome, vendedor, produto, valor, lucro, 'MercadoPhone', tipoVenda, 'Concluído', createdAt]
         );
         countNew++;
+        triggerRealTimeSaleNotification(vendedor, produto, valor, lucro).catch(err => console.error('[NFTY] Erro no push de venda:', err));
+
+        const faturamentoBRL = parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        await createNotification(
+          'venda',
+          'Nova Venda Realizada',
+          `${vendedor || 'Vendedor'} vendeu ${produto} por R$ ${faturamentoBRL}.`
+        );
+        await checkGoalsProgress('venda');
 
         const cleanPhone = telefone.replace(/\D/g, '');
         if (cleanPhone) {
@@ -303,48 +371,13 @@ export async function syncMercadoPhoneSales(limit = 100) {
     return { newSales: countNew, totalProcessed: sales.length };
   } catch (err) {
     console.error('[SYNC] Erro ao sincronizar:', err);
+    await createNotification(
+      'sistema',
+      'Falha na Sincronizacao MercadoPhone',
+      `Erro ao sincronizar vendas: ${err.message || err}`
+    );
     throw err;
   }
-}
-
-export function getAcreDateRange(periodo) {
-  const now = new Date();
-  const ACRE_OFFSET = 5 * 60 * 60 * 1000;
-  
-  const getUTCStartAndEndForAcreDate = (acreDate) => {
-    const start = new Date(acreDate);
-    start.setUTCHours(0, 0, 0, 0);
-    const startUTC = new Date(start.getTime() + ACRE_OFFSET);
-
-    const end = new Date(acreDate);
-    end.setUTCHours(23, 59, 59, 999);
-    const endUTC = new Date(end.getTime() + ACRE_OFFSET);
-
-    return [startUTC, endUTC];
-  };
-
-  const acreNow = new Date(now.getTime() - ACRE_OFFSET);
-
-  if (periodo === 'hoje') {
-    return getUTCStartAndEndForAcreDate(acreNow);
-  } else if (periodo === 'ontem') {
-    const acreYesterday = new Date(acreNow);
-    acreYesterday.setUTCDate(acreYesterday.getUTCDate() - 1);
-    return getUTCStartAndEndForAcreDate(acreYesterday);
-  } else if (periodo === '7dias') {
-    const startAcre = new Date(acreNow);
-    startAcre.setUTCDate(startAcre.getUTCDate() - 7);
-    startAcre.setUTCHours(0, 0, 0, 0);
-    const startUTC = new Date(startAcre.getTime() + ACRE_OFFSET);
-    return [startUTC, now];
-  } else if (periodo === 'mes') {
-    const startAcre = new Date(acreNow);
-    startAcre.setUTCDate(startAcre.getUTCDate() - 30);
-    startAcre.setUTCHours(0, 0, 0, 0);
-    const startUTC = new Date(startAcre.getTime() + ACRE_OFFSET);
-    return [startUTC, now];
-  }
-  return [now, now];
 }
 
 app.use(cors({ 
@@ -572,7 +605,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
               console.log(`[DEBUG TOKEN] Aviso: Nenhuma página encontrada vinculada a este token. Usando token original.`);
             }
 
-            const userUrl = `https://graph.facebook.com/v19.0/${leadIdForQuery}?fields=name,username,profile_pic&access_token=${pageAccessToken}`;
+            const userUrl = `https://graph.facebook.com/v19.0/${leadIdForQuery}?fields=name,profile_pic&access_token=${pageAccessToken}`;
             console.log(`[DEBUG PERFIL] Tentando capturar perfil de: ${leadIdForQuery}`);
             
             const userRes = await fetch(userUrl);
@@ -580,10 +613,9 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
             console.log(`[DEBUG PERFIL] Resposta Meta:`, JSON.stringify(userData));
             
-            if (userData.name || userData.profile_pic || userData.username) {
+            if (userData.name || userData.profile_pic) {
               if (userData.profile_pic) profilePic = userData.profile_pic;
               if (userData.name) name = userData.name;
-              if (userData.username) instagramHandle = userData.username;
               fileLog(`✅ Perfil capturado com sucesso: ${name}`);
             } else if (userData.error) {
               fileLog(`Aviso: Falha na captura: ${userData.error.message}`);
@@ -669,6 +701,13 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           );
           leadId = leadRes.rows[0].id;
           console.log('[DEBUG INSTAGRAM] Novo Lead Criado:', leadId);
+
+          await createNotification(
+            'lead',
+            'Novo Lead no Instagram',
+            `O contato "${name}" iniciou uma conversa no Instagram Direct.`
+          );
+          await checkGoalsProgress('lead');
         }
           
         if (igMessageText) {
@@ -744,6 +783,9 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         targetAccountId = accountRes.rows[0].id;
       }
 
+      const existingLeadCheck = await pool.query('SELECT id FROM "Lead" WHERE phone = $1', [phone]);
+      const isNewLead = existingLeadCheck.rows.length === 0;
+
       if (true) {
         const leadRes = await pool.query(
           `INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", tags, "createdAt", "updatedAt", "lastInteractionAt") 
@@ -752,6 +794,15 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           [name, phone, targetAccountId, adName, adsetName, campaignName, tags]
         );
         const leadId = leadRes.rows[0].id;
+
+        if (isNewLead) {
+          await createNotification(
+            'lead',
+            'Novo Lead no WhatsApp',
+            `O contato "${name}" (${phone}) iniciou uma conversa no WhatsApp. Origem: ${tags.join(', ')}.`
+          );
+          await checkGoalsProgress('lead');
+        }
 
         // Salva a mensagem recebida no histórico (Deduplicação via mid)
         let messageText = message.text?.body || 'Mensagem de Mídia/Arquivo';
@@ -831,6 +882,9 @@ app.post('/api/webhooks/zapi', async (req, res) => {
       const accountRes = await pool.query('SELECT id FROM "AdAccount" WHERE status = \'ACTIVE\' LIMIT 1');
       if (accountRes.rows.length > 0) targetAccountId = accountRes.rows[0].id;
 
+      const existingLeadCheck = await pool.query('SELECT id FROM "Lead" WHERE phone = $1', [phone]);
+      const isNewLead = existingLeadCheck.rows.length === 0;
+
       const leadRes = await pool.query(
         `INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", tags, "createdAt", "updatedAt", "lastInteractionAt", "profilePic") 
          VALUES (gen_random_uuid(), $1, $2, 'Novo', $3, 'Direto/Z-API', 'Inbound', 'Z-API', 'whatsapp', $4, NOW(), NOW(), NOW(), $5)
@@ -845,6 +899,15 @@ app.post('/api/webhooks/zapi', async (req, res) => {
       
       const leadId = leadRes.rows[0].id;
       const currentStatus = leadRes.rows[0].status;
+
+      if (isNewLead && !isFromMe) {
+        await createNotification(
+          'lead',
+          'Novo Lead no WhatsApp',
+          `O contato "${customerName}" (${phone.split('@')[0]}) iniciou uma conversa no WhatsApp.`
+        );
+        await checkGoalsProgress('lead');
+      }
 
       const resultWA = await pool.query(
         'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, $2, $3, NOW(), $4) ON CONFLICT (mid) DO NOTHING RETURNING id',
@@ -913,6 +976,10 @@ app.get('/api/whatsapp/qrcode', async (req, res) => {
     });
     const data = await response.json();
     console.log(`[Z-API QRCODE] Resposta:`, data.value ? 'QR Code Recebido (Base64)' : data);
+
+    if (data.error) {
+      return res.json({ status: 'error', error: data.error });
+    }
 
     if (data.value) {
       return res.json({ qrcode: data.value });
@@ -1118,16 +1185,57 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   let wherePDV = "";
   let paramsPDV = [];
 
+  const getLocalTodayRange = () => {
+    const start = new Date();
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    end.setHours(23,59,59,999);
+    return [start, end];
+  };
+
+  const getLocalYesterdayRange = () => {
+    const start = new Date();
+    start.setDate(start.getDate() - 1);
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    end.setDate(end.getDate() - 1);
+    end.setHours(23,59,59,999);
+    return [start, end];
+  };
+
   if (periodo === 'personalizado' && dateStart && dateEnd) {
       wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
       paramsPDV = [new Date(dateStart), new Date(dateEnd)];
-  } else {
-      const [start, end] = getAcreDateRange(periodo);
-      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
+  } else if (periodo === 'hoje') { 
+      const [start, end] = getLocalTodayRange();
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
+  }
+  else if (periodo === '7dias') { 
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setHours(23,59,59,999);
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
+  }
+  else if (periodo === 'mes') { 
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      start.setHours(0,0,0,0);
+      const end = new Date();
+      end.setHours(23,59,59,999);
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
+      paramsPDV = [start, end];
+  }
+  else if (periodo === 'ontem') { 
+      const [start, end] = getLocalYesterdayRange();
+      wherePDV = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2'; 
       paramsPDV = [start, end];
   }
 
-  const salesRes = await pool.query(`SELECT SUM("valorTotal") as total, COUNT(*) as qtd, SUM(CASE WHEN "tipoVenda" = 'Trafego Pago' THEN "valorTotal" ELSE 0 END) as total_trafego FROM "Sale" ${wherePDV}`, paramsPDV);
+  const salesRes = await pool.query(`SELECT SUM("valorTotal") as total, COUNT(*) as qtd, SUM(CASE WHEN "tipoVenda" = 'Trafego Pago' THEN "valorTotal" ELSE 0 END) as total_trafego, SUM(lucro) as total_lucro FROM "Sale" ${wherePDV}`, paramsPDV);
   
   // Vendas por tipo (Donut Chart)
   const salesByTypeRes = await pool.query(`SELECT "tipoVenda" as label, SUM("valorTotal") as value FROM "Sale" ${wherePDV} GROUP BY "tipoVenda"`, paramsPDV);
@@ -1148,6 +1256,7 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
     faturamento: parseFloat(salesRes.rows[0].total || 0),
     qtd: parseInt(salesRes.rows[0].qtd || 0),
     faturamentoTrafego: parseFloat(salesRes.rows[0].total_trafego || 0),
+    lucro: parseFloat(salesRes.rows[0].total_lucro || 0),
     salesByType: salesByTypeRes.rows.map(r => ({ label: r.label || 'Outros', value: parseFloat(r.value || 0) })),
     leadsByPlatform: leadsByPlatformRes.rows.map(r => ({ label: r.label || 'Indefinido', value: parseInt(r.value || 0) }))
   };
@@ -1210,6 +1319,74 @@ cron.schedule('*/15 * * * *', async () => {
     await syncMercadoPhoneSales(200);
   } catch (err) {
     console.error('[CRON] Erro na sincronizacao agendada:', err);
+  }
+});
+
+// Variáveis de controle de envio do nfty para evitar repetição no mesmo minuto
+let lastDailySentDate = null;
+let lastWeeklySentDate = null;
+let lastLunchSentDate = null;
+let lastCpaSentDate = null;
+
+// Cron Job: Relatórios Push via nfty (Roda a cada minuto)
+cron.schedule('* * * * *', async () => {
+  try {
+    const configRes = await pool.query('SELECT * FROM "NotificationConfig" WHERE id = $1', ['default']);
+    if (configRes.rows.length === 0) return;
+    
+    const config = configRes.rows[0];
+    if (!config.enabled) return;
+
+    // Obtém hora e data no fuso de Rio Branco
+    const acreTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Rio_Branco' }));
+    
+    const hour = String(acreTime.getHours()).padStart(2, '0');
+    const minute = String(acreTime.getMinutes()).padStart(2, '0');
+    const timeStr = `${hour}:${minute}`; // ex: "19:00"
+
+    const year = acreTime.getFullYear();
+    const month = String(acreTime.getMonth() + 1).padStart(2, '0');
+    const day = String(acreTime.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`; // "YYYY-MM-DD"
+    const dayOfWeek = acreTime.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+
+    // Disparo Diário (19:00)
+    if (timeStr === (config.dailyReportTime || '19:00')) {
+      if (lastDailySentDate !== dateStr) {
+        lastDailySentDate = dateStr;
+        console.log(`[CRON NFTY] Iniciando envio do relatorio diario automatico (${timeStr} Rio Branco)...`);
+        runDailyNftyReport().catch(err => console.error('[CRON NFTY] Erro ao enviar relatorio diario:', err));
+      }
+    }
+
+    // Disparo Semanal (Domingos às 19:00)
+    if (dayOfWeek === 0 && timeStr === (config.dailyReportTime || '19:00')) {
+      if (lastWeeklySentDate !== dateStr) {
+        lastWeeklySentDate = dateStr;
+        console.log(`[CRON NFTY] Iniciando envio do relatorio semanal automatico (${timeStr} Rio Branco)...`);
+        runWeeklyNftyReport().catch(err => console.error('[CRON NFTY] Erro ao enviar relatorio semanal:', err));
+      }
+    }
+
+    // Disparo Relatório Parcial do Almoço (13:00)
+    if (timeStr === '13:00') {
+      if (lastLunchSentDate !== dateStr) {
+        lastLunchSentDate = dateStr;
+        console.log(`[CRON NFTY] Iniciando envio do relatorio de almoco automatico (13:00 Rio Branco)...`);
+        runLunchNftyReport().catch(err => console.error('[CRON NFTY] Erro ao enviar relatorio de almoco:', err));
+      }
+    }
+
+    // Disparo Alerta de CPA Alto (10:00)
+    if (timeStr === '10:00') {
+      if (lastCpaSentDate !== dateStr) {
+        lastCpaSentDate = dateStr;
+        console.log(`[CRON NFTY] Iniciando verificacao de limites de CPA automatico (10:00 Rio Branco)...`);
+        runCpaNftyReport().catch(err => console.error('[CRON NFTY] Erro ao verificar CPA:', err));
+      }
+    }
+  } catch (err) {
+    console.error('[CRON NFTY] Erro no agendador de notificacoes:', err);
   }
 });
 
@@ -1374,6 +1551,18 @@ app.post('/api/generate-insights', async (req, res) => {
 // ---------------------------------------------------------
 // JARVIS CHAT & VOICE INTELLIGENCE
 // ---------------------------------------------------------
+// Cache em memória para os dados de diagnóstico e contexto do Jarvis
+let jarvisDataCache = null;
+let jarvisDataCacheTime = 0;
+const DATA_CACHE_TTL = 120 * 1000; // 2 minutos em milissegundos
+
+// Função para invalidar reativamente o cache do Jarvis
+function clearJarvisDiagnosticsCache() {
+  console.log('[JARVIS CACHE] Cache de diagnóstico invalidado reativamente.');
+  jarvisDataCache = null;
+  jarvisDataCacheTime = 0;
+}
+
 app.post('/api/jarvis/chat', async (req, res) => {
   const { messages } = req.body;
   const lastUserMessage = messages[messages.length - 1]?.content;
@@ -1402,148 +1591,189 @@ app.post('/api/jarvis/chat', async (req, res) => {
     const systemPrompt = config.systemPrompt;
     const selectedModel = config.model || "gpt-4o";
 
-    // CONTAGEM EM TEMPO REAL DO CRM (PARA TODOS OS PERÍODOS)
-    const [todayStart, todayEnd] = getAcreDateRange('hoje');
-    const [yesterdayStart, yesterdayEnd] = getAcreDateRange('ontem');
-    const [start7d] = getAcreDateRange('7dias');
-    const [start30d] = getAcreDateRange('mes');
+    let systemDiagnostics = null;
+    let customGoals = null;
+    let knowledgeContext = null;
+    const nowTime = Date.now();
 
-    const now = new Date();
-    const ACRE_OFFSET = 5 * 60 * 60 * 1000;
-    const acreNow = new Date(now.getTime() - ACRE_OFFSET);
-    const startMonthAcre = new Date(acreNow);
-    startMonthAcre.setUTCDate(1);
-    startMonthAcre.setUTCHours(0, 0, 0, 0);
-    const startMonth = new Date(startMonthAcre.getTime() + ACRE_OFFSET);
-
-    // Carrega dados de campanhas do Facebook em paralelo (se conta estiver ativa)
-    let campaignsPromise = Promise.resolve([]);
-    if (qAcc.rows.length > 0) {
-      const acc = qAcc.rows[0];
-      const decryptedToken = decrypt(acc.accessToken);
-      const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
-      const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,daily_budget,lifetime_budget,insights.date_preset(this_month){spend,actions,reach,impressions,clicks,cpc,cpm,ctr,frequency}&access_token=${decryptedToken}`;
-      campaignsPromise = fetch(url)
-        .then(r => r.json())
-        .then(campRes => {
-          if (campRes.data) {
-            return campRes.data.map(c => {
-              const ins = c.insights?.data?.[0] || {};
-              return {
-                nome: c.name,
-                status: c.status,
-                orcamento: (parseFloat(c.daily_budget || c.lifetime_budget || 0) / 100).toFixed(2),
-                gastoMes: parseFloat(ins.spend || 0).toFixed(2),
-                ctr: parseFloat(ins.ctr || 0).toFixed(2) + "%",
-                cpc: parseFloat(ins.cpc || 0).toFixed(2),
-                cpm: parseFloat(ins.cpm || 0).toFixed(2),
-                freq: parseFloat(ins.frequency || 0).toFixed(2),
-                leadsMes: parseInt(ins.actions?.find(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')?.value || 0)
-              };
-            });
-          }
-          return [];
-        })
-        .catch(e => {
-          console.error('Erro ao buscar campanhas para o Jarvis:', e);
-          return [];
-        });
-    }
-
-    // Puxa as métricas de dashboard e todas as contagens em paralelo! (Melhoria de Performance)
-    const [
-      [metricsHoje, metricsOntem, metrics7Dias, metrics30Dias, metricsMes],
-      campaignsContext,
-      leadsHojeDB,
-      leadsOntemDB,
-      leads7DiasDB,
-      leads30DiasDB,
-      leadsMesDB,
-      recentLeadsRes,
-      recentSalesRes,
-      customGoals,
-      kbFiles
-    ] = await Promise.all([
-      Promise.all([
-        fetchDashboardMetrics({ periodo: 'hoje' }),
-        fetchDashboardMetrics({ periodo: 'ontem' }),
-        fetchDashboardMetrics({ periodo: '7dias' }),
-        fetchDashboardMetrics({ periodo: '30dias' }),
-        fetchDashboardMetrics({ periodo: 'mes' })
-      ]),
-      campaignsPromise,
-      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count)),
-      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count)),
-      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start7d]).then(r => parseInt(r.rows[0].count)),
-      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start30d]).then(r => parseInt(r.rows[0].count)),
-      pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startMonth]).then(r => parseInt(r.rows[0].count)),
-      pool.query(`
-        SELECT l.name, l.status, l.platform,
-          (
-            SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
-            FROM (
-              SELECT sender, content, "createdAt" as idx 
-              FROM "Message" 
-              WHERE "leadId" = l.id 
-              ORDER BY "createdAt" DESC 
-              LIMIT 10
-            ) m
-          ) as "chatHistory"
-        FROM "Lead" l 
-        ORDER BY l."lastInteractionAt" DESC LIMIT 5
-      `),
-      pool.query(`
-        SELECT s.*, 
-               l.platform as lead_platform, 
-               l."campaignName" as lead_campaign
-        FROM "Sale" s
-        LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
-        ORDER BY s."createdAt" DESC LIMIT 10
-      `),
-      prisma.customGoal.findMany({ where: { active: true } }),
-      prisma.knowledgeFile.findMany({ where: { active: true } })
-    ]);
-
-    // Função auxiliar para formatar métricas completas para o Jarvis
-    const formatFullMetrics = (d, contatosReais = null) => {
-      const m = d.metrics;
-      const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
-      const cpc = m.clicks > 0 ? m.totalSpent / m.clicks : 0;
-      const roas = m.totalSpent > 0 ? d.pdv.faturamento / m.totalSpent : 0;
-      return {
-        gasto: Number(m.totalSpent).toFixed(2),
-        leads_facebook: Number(m.msgConversations),
-        contatos_crm: contatosReais !== null ? contatosReais : 'N/A',
-        faturamento: Number(d.pdv.faturamento).toFixed(2),
-        vendas: Number(d.pdv.qtd || 0),
-        cliques: m.clicks,
-        impressoes: m.impressions,
-        ctr: ctr.toFixed(2) + "%",
-        cpc: cpc.toFixed(2),
-        roas: roas.toFixed(2)
+    if (jarvisDataCache && (nowTime - jarvisDataCacheTime < DATA_CACHE_TTL)) {
+      console.log('[JARVIS CHAT] Usando cache em memória para dados operacionais (TTL restante:', Math.round((DATA_CACHE_TTL - (nowTime - jarvisDataCacheTime)) / 1000), 's)');
+      systemDiagnostics = jarvisDataCache.systemDiagnostics;
+      customGoals = jarvisDataCache.customGoals;
+      knowledgeContext = jarvisDataCache.knowledgeContext;
+    } else {
+      console.log('[JARVIS CHAT] Cache expirado ou ausente. Buscando dados do tráfego, vendas e metas...');
+      
+      // Prepara períodos de datas
+      const getLocalTodayRange = () => {
+        const start = new Date();
+        start.setHours(0,0,0,0);
+        const end = new Date();
+        end.setHours(23,59,59,999);
+        return [start, end];
       };
-    };
 
-    const systemDiagnostics = {
-      // CONTEXTO TEMPORAL ULTRA-DETALHADO
-      timeContext: {
-        hoje: formatFullMetrics(metricsHoje, leadsHojeDB),
-        ontem: formatFullMetrics(metricsOntem, leadsOntemDB),
-        ultimos7Dias: formatFullMetrics(metrics7Dias, leads7DiasDB),
-        ultimos30Dias: formatFullMetrics(metrics30Dias, leads30DiasDB),
-        mesAtual: formatFullMetrics(metricsMes, leadsMesDB)
-      },
-      campaigns: campaignsContext,
-      integrations: {
-        metaAds: metricsHoje.metaApiError ? `ERRO: ${metricsHoje.metaApiError}` : "Conectado e Operacional",
-        pdv: recentSalesRes.rows.some(s => s.canalVenda === 'MercadoPhone') ? "Ativo (Vendas Recentes Detectadas)" : "Aguardando Primeiras Vendas",
-        brain: !!process.env.OPENAI_API_KEY ? "Conectado" : "Offline (Sem Chave API)"
-      },
-      recentLeads: recentLeadsRes.rows,
-      recentSales: recentSalesRes.rows
-    };
+      const getLocalYesterdayRange = () => {
+        const start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0,0,0,0);
+        const end = new Date();
+        end.setDate(end.getDate() - 1);
+        end.setHours(23,59,59,999);
+        return [start, end];
+      };
 
-    const knowledgeContext = kbFiles.map(f => `### DOCUMENTO: ${f.fileName} ###\n${f.content}`).join('\n\n');
+      const [todayStart, todayEnd] = getLocalTodayRange();
+      const [yesterdayStart, yesterdayEnd] = getLocalYesterdayRange();
+
+      const start7d = new Date();
+      start7d.setDate(start7d.getDate() - 7);
+      start7d.setHours(0,0,0,0);
+
+      const start30d = new Date();
+      start30d.setDate(start30d.getDate() - 30);
+      start30d.setHours(0,0,0,0);
+
+      const startMonth = new Date();
+      startMonth.setDate(1);
+      startMonth.setHours(0,0,0,0);
+
+      // Carrega dados de campanhas do Facebook em paralelo (se conta estiver ativa)
+      let campaignsPromise = Promise.resolve([]);
+      if (qAcc.rows.length > 0) {
+        const acc = qAcc.rows[0];
+        const decryptedToken = decrypt(acc.accessToken);
+        const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
+        const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,daily_budget,lifetime_budget,insights.date_preset(this_month){spend,actions,reach,impressions,clicks,cpc,cpm,ctr,frequency}&access_token=${decryptedToken}`;
+        campaignsPromise = fetch(url)
+          .then(r => r.json())
+          .then(campRes => {
+            if (campRes.data) {
+              return campRes.data.map(c => {
+                const ins = c.insights?.data?.[0] || {};
+                return {
+                  nome: c.name,
+                  status: c.status,
+                  orcamento: (parseFloat(c.daily_budget || c.lifetime_budget || 0) / 100).toFixed(2),
+                  gastoMes: parseFloat(ins.spend || 0).toFixed(2),
+                  ctr: parseFloat(ins.ctr || 0).toFixed(2) + "%",
+                  cpc: parseFloat(ins.cpc || 0).toFixed(2),
+                  cpm: parseFloat(ins.cpm || 0).toFixed(2),
+                  freq: parseFloat(ins.frequency || 0).toFixed(2),
+                  leadsMes: parseInt(ins.actions?.find(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')?.value || 0)
+                };
+              });
+            }
+            return [];
+          })
+          .catch(e => {
+            console.error('Erro ao buscar campanhas para o Jarvis:', e);
+            return [];
+          });
+      }
+
+      // Puxa as métricas de dashboard e todas as contagens em paralelo! (Melhoria de Performance)
+      const [
+        [metricsHoje, metricsOntem, metrics7Dias, metrics30Dias, metricsMes],
+        campaignsContext,
+        leadsHojeDB,
+        leadsOntemDB,
+        leads7DiasDB,
+        leads30DiasDB,
+        leadsMesDB,
+        recentLeadsRes,
+        recentSalesRes,
+        customGoalsRes,
+        kbFiles
+      ] = await Promise.all([
+        Promise.all([
+          fetchDashboardMetrics({ periodo: 'hoje' }),
+          fetchDashboardMetrics({ periodo: 'ontem' }),
+          fetchDashboardMetrics({ periodo: '7dias' }),
+          fetchDashboardMetrics({ periodo: '30dias' }),
+          fetchDashboardMetrics({ periodo: 'mes' })
+        ]),
+        campaignsPromise,
+        pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [todayStart, todayEnd]).then(r => parseInt(r.rows[0].count)),
+        pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [yesterdayStart, yesterdayEnd]).then(r => parseInt(r.rows[0].count)),
+        pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start7d]).then(r => parseInt(r.rows[0].count)),
+        pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [start30d]).then(r => parseInt(r.rows[0].count)),
+        pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startMonth]).then(r => parseInt(r.rows[0].count)),
+        pool.query(`
+          SELECT l.name, l.status, l.platform,
+            (
+              SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
+              FROM (
+                SELECT sender, content, "createdAt" as idx 
+                FROM "Message" 
+                WHERE "leadId" = l.id 
+                ORDER BY "createdAt" DESC 
+                LIMIT 10
+              ) m
+            ) as "chatHistory"
+          FROM "Lead" l 
+          ORDER BY l."lastInteractionAt" DESC LIMIT 5
+        `),
+        pool.query(`
+          SELECT s.*, 
+                 l.platform as lead_platform, 
+                 l."campaignName" as lead_campaign
+          FROM "Sale" s
+          LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
+          ORDER BY s."createdAt" DESC LIMIT 10
+        `),
+        prisma.customGoal.findMany({ where: { active: true } }),
+        prisma.knowledgeFile.findMany({ where: { active: true } })
+      ]);
+
+      // Função auxiliar para formatar métricas completas para o Jarvis
+      const formatFullMetrics = (d, contatosReais = null) => {
+        const m = d.metrics;
+        const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
+        const cpc = m.clicks > 0 ? m.totalSpent / m.clicks : 0;
+        const roas = m.totalSpent > 0 ? d.pdv.faturamento / m.totalSpent : 0;
+        return {
+          gasto: Number(m.totalSpent).toFixed(2),
+          leads_facebook: Number(m.msgConversations),
+          contatos_crm: contatosReais !== null ? contatosReais : 'N/A',
+          faturamento: Number(d.pdv.faturamento).toFixed(2),
+          cliques: m.clicks,
+          impressoes: m.impressions,
+          ctr: ctr.toFixed(2) + "%",
+          cpc: cpc.toFixed(2),
+          roas: roas.toFixed(2)
+        };
+      };
+
+      systemDiagnostics = {
+        timeContext: {
+          hoje: formatFullMetrics(metricsHoje, leadsHojeDB),
+          ontem: formatFullMetrics(metricsOntem, leadsOntemDB),
+          ultimos7Dias: formatFullMetrics(metrics7Dias, leads7DiasDB),
+          ultimos30Dias: formatFullMetrics(metrics30Dias, leads30DiasDB),
+          mesAtual: formatFullMetrics(metricsMes, leadsMesDB)
+        },
+        campaigns: campaignsContext,
+        integrations: {
+          metaAds: metricsHoje.metaApiError ? `ERRO: ${metricsHoje.metaApiError}` : "Conectado e Operacional",
+          pdv: recentSalesRes.rows.some(s => s.canalVenda === 'MercadoPhone') ? "Ativo (Vendas Recentes Detectadas)" : "Aguardando Primeiras Vendas",
+          brain: !!process.env.OPENAI_API_KEY ? "Conectado" : "Offline (Sem Chave API)"
+        },
+        recentLeads: recentLeadsRes.rows,
+        recentSales: recentSalesRes.rows
+      };
+
+      customGoals = customGoalsRes;
+      knowledgeContext = kbFiles.map(f => `### DOCUMENTO: ${f.fileName} ###\n${f.content}`).join('\n\n');
+
+      // Atualiza o cache global
+      jarvisDataCache = {
+        systemDiagnostics,
+        customGoals,
+        knowledgeContext
+      };
+      jarvisDataCacheTime = nowTime;
+    }
 
     const jarvisTextReply = await generateJarvisChatResponse(
       contextualMessages, 
@@ -1592,6 +1822,7 @@ app.get('/api/jarvis/history', async (req, res) => {
 app.delete('/api/jarvis/history', async (req, res) => {
   try {
     await pool.query('DELETE FROM "JarvisMessage"');
+    clearJarvisDiagnosticsCache();
     res.json({ message: 'Histórico expurgado com sucesso' });
   } catch (err) {
     console.error('Erro ao limpar histórico do Jarvis:', err);
@@ -1712,17 +1943,19 @@ app.post('/api/webhooks/mercadophone', async (req, res) => {
 app.get('/api/pdv/dashboard', async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
-    const [todayStart, todayEnd] = getAcreDateRange('hoje');
-    
-    let dateFilter = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
-    let queryParams = [todayStart, todayEnd];
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
+    const localDateStr = localDate.toISOString().split('T')[0];
+
+    let dateFilter = 'WHERE "createdAt"::date = $1';
+    let queryParams = [localDateStr];
 
     if (startDate && endDate) {
-      dateFilter = 'WHERE "createdAt" >= $1 AND "createdAt" <= $2';
-      queryParams = [new Date(startDate), new Date(endDate)];
+      dateFilter = 'WHERE "createdAt"::date BETWEEN $1 AND $2';
+      queryParams = [startDate, endDate];
     } else if (startDate) {
-      dateFilter = 'WHERE "createdAt" >= $1';
-      queryParams = [new Date(startDate)];
+      dateFilter = 'WHERE "createdAt"::date >= $1';
+      queryParams = [startDate];
     }
 
     // Métricas do Período
@@ -1840,14 +2073,27 @@ app.post('/api/generate-daily-insight', async (req, res) => {
 app.get('/api/ai-config', async (req, res) => {
   try {
     const config = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
+    const defaultPrompt = "Você é o Jarvis, um assistente virtual estrategista especializado em gestão de tráfego pago (Meta Ads) e vendas de celulares (iPhones e Androids). Seu objetivo é analisar os números do dia e dar conselhos práticos e diretos.";
+    
     if (config.rows.length === 0) {
-      const defaultPrompt = "Você é o Jarvis, um assistente virtual estrategista especializado em gestão de tráfego pago (Meta Ads) e vendas de celulares (iPhones e Androids). Seu objetivo é analisar os números do dia e dar conselhos práticos e diretos.";
       const newConfig = await pool.query(
         'INSERT INTO "AiConfig" (id, "systemPrompt", model, "updatedAt") VALUES ($1, $2, $3, NOW()) RETURNING *',
         ['default', defaultPrompt, 'gpt-4o']
       );
       return res.json(newConfig.rows[0]);
     }
+    
+    if (!config.rows[0].systemPrompt || config.rows[0].systemPrompt.trim() === '') {
+      const updatedConfig = await pool.query(
+        'UPDATE "AiConfig" SET "systemPrompt" = $1, "updatedAt" = NOW() WHERE id = $2 RETURNING *',
+        [defaultPrompt, 'default']
+      );
+      return res.json({ 
+        ...updatedConfig.rows[0], 
+        isConfigured: !!process.env.OPENAI_API_KEY 
+      });
+    }
+
     res.json({ 
       ...config.rows[0], 
       isConfigured: !!process.env.OPENAI_API_KEY 
@@ -1906,6 +2152,7 @@ app.post('/api/ai-config', async (req, res) => {
             ]
         );
     }
+    clearJarvisDiagnosticsCache();
     res.json({ message: 'Configuração salva com sucesso' });
   } catch (err) {
     console.error('Erro ao salvar config de IA:', err);
@@ -1932,6 +2179,7 @@ app.post('/api/custom-goals', async (req, res) => {
       'INSERT INTO "CustomGoal" (id, name, value, unit, period, active, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *',
       [id, name, String(value), unit || null, period || null, true]
     );
+    clearJarvisDiagnosticsCache();
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Erro ao criar meta dinâmica:', err);
@@ -1943,10 +2191,514 @@ app.delete('/api/custom-goals/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM "CustomGoal" WHERE id = $1', [id]);
+    clearJarvisDiagnosticsCache();
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao deletar meta dinâmica:', err);
     res.status(500).json({ error: 'Erro ao deletar meta' });
+  }
+});
+
+// ---------------------------------------------------------
+// NOTIFICAÇÕES PUSH (NFTY.SH)
+// ---------------------------------------------------------
+
+export async function sendNftyNotification({ title, body, priority = 'default', tags = '' }) {
+  try {
+    const configRes = await pool.query('SELECT * FROM "NotificationConfig" WHERE id = $1', ['default']);
+    if (configRes.rows.length === 0) return { success: false, error: 'Configuracao do nfty nao encontrada' };
+    
+    const config = configRes.rows[0];
+    if (!config.enabled) {
+      console.log('[NFTY] Notificacoes push estao desativadas nas configuracoes.');
+      return { success: false, error: 'Desativado' };
+    }
+
+    const nftyUrl = (config.url || 'https://ntfy.sh').replace(/\/$/, '');
+    const topic = config.topic;
+    
+    if (!topic) {
+      console.error('[NFTY] Topico do nfty nao configurado.');
+      return { success: false, error: 'Topico nao configurado' };
+    }
+
+    const response = await fetch(`${nftyUrl}/${topic}`, {
+      method: 'POST',
+      body: body,
+      headers: {
+        'Title': title,
+        'Priority': priority,
+        'Tags': tags
+      }
+    });
+
+    if (response.ok) {
+      console.log(`[NFTY] Notificacao enviada com sucesso: "${title}"`);
+      return { success: true };
+    } else {
+      const errText = await response.text();
+      console.error(`[NFTY] Erro ao enviar para o nfty: ${response.status} - ${errText}`);
+      return { success: false, error: `Servidor retornou status ${response.status}` };
+    }
+  } catch (err) {
+    console.error('[NFTY] Erro de rede ou interno ao disparar nfty:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+function getDailyGreeting() {
+  const greetings = [
+    "Senhor Gustavo, preparei o relatorio diario dos resultados de hoje:",
+    "Chefe, segue o relatorio diario dos resultados de hoje:",
+    "Senhor, aqui esta o relatorio diario com a performance de hoje:",
+    "Chefe, os numeros de hoje ja foram fechados. Segue o relatorio diario:",
+    "Senhor Gustavo, segue o relatorio com as metricas de hoje:",
+    "Chefe, aqui estao os dados de desempenho de hoje para sua analise:"
+  ];
+  return greetings[Math.floor(Math.random() * greetings.length)];
+}
+
+function getWeeklyGreeting() {
+  const greetings = [
+    "Senhor Gustavo, preparei o relatorio semanal com a performance da nossa operacao:",
+    "Chefe, segue o relatorio semanal com os resultados dos ultimos sete dias:",
+    "Senhor, reuni as metricas da ultima semana. Segue o relatorio semanal:",
+    "Chefe, aqui esta o relatorio semanal dos ultimos sete dias da nossa operacao:",
+    "Senhor Gustavo, as metricas da semana foram fechadas. Segue o relatorio semanal:"
+  ];
+  return greetings[Math.floor(Math.random() * greetings.length)];
+}
+
+export async function runDailyNftyReport() {
+  console.log('[NFTY] Iniciando geracao do Relatorio Diario de Performance...');
+  try {
+    const { metrics, pdv } = await fetchDashboardMetrics({ periodo: 'hoje' });
+    const aiConfigRes = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
+    const systemPrompt = aiConfigRes.rows[0]?.systemPrompt;
+    const selectedModel = aiConfigRes.rows[0]?.model || "gpt-4o";
+
+    const faturamento = pdv.faturamento;
+    const investimento = metrics.totalSpent;
+    const lucro = pdv.lucro - investimento;
+    const roas = investimento > 0 ? (faturamento / investimento).toFixed(1) : '0.0';
+    const vendas = pdv.qtd;
+    const ticket_medio = vendas > 0 ? (faturamento / vendas).toFixed(2) : '0.00';
+    
+    const startOfDay = new Date();
+    startOfDay.setHours(0,0,0,0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23,59,59,999);
+    const leadsRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [startOfDay, endOfDay]);
+    const leads = parseInt(leadsRes.rows[0].count) || 0;
+    const conversao = leads > 0 ? ((vendas / leads) * 100).toFixed(1) : '0.0';
+
+    const salesGoalRes = await pool.query('SELECT * FROM "SalesGoal" WHERE id = $1', ['default']);
+    const dailySalesGoal = salesGoalRes.rows[0]?.dailySalesGoal || 0;
+    const percentual_meta = dailySalesGoal > 0 ? Math.min(100, Math.round((vendas / dailySalesGoal) * 100)) : 0;
+
+    let melhorCampanha = 'Nenhuma';
+    let roasMelhor = '0.0';
+    let piorCampanha = 'Nenhuma';
+    let roasPior = '0.0';
+
+    const qAcc = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a.status = \'ACTIVE\' LIMIT 1');
+    if (qAcc.rows.length > 0) {
+      try {
+        const acc = qAcc.rows[0];
+        const decryptedToken = decrypt(acc.accessToken);
+        const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
+        const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,insights.date_preset(today){spend,action_values}&access_token=${decryptedToken}`;
+        const campRes = await fetch(url).then(r => r.json());
+        
+        if (campRes.data) {
+          let camps = campRes.data.map(c => {
+            const ins = c.insights?.data?.[0] || {};
+            const spend = parseFloat(ins.spend || 0);
+            let purchaseValue = 0;
+            if (ins.action_values) {
+              const pv = ins.action_values.find(a => a.action_type === 'purchase');
+              if (pv) purchaseValue = parseFloat(pv.value || 0);
+            }
+            const cRoas = spend > 0 ? purchaseValue / spend : 0;
+            return { name: c.name, spend, purchaseValue, roas: cRoas };
+          }).filter(c => c.spend > 0);
+
+          if (camps.length > 0) {
+            camps.sort((a, b) => b.roas - a.roas);
+            melhorCampanha = camps[0].name;
+            roasMelhor = camps[0].roas.toFixed(1);
+            piorCampanha = camps[camps.length - 1].name;
+            roasPior = camps[camps.length - 1].roas.toFixed(1);
+          }
+        }
+      } catch (err) {
+        console.error('[NFTY] Erro ao buscar campanhas para o relatorio diario:', err.message);
+      }
+    }
+
+    const metricsForSummary = {
+      faturamento: faturamento.toFixed(2),
+      investimento: investimento.toFixed(2),
+      lucro: lucro.toFixed(2),
+      roas,
+      vendas,
+      leads,
+      conversao
+    };
+
+    const resumo_jarvis = await generateNftyShortSummary(metricsForSummary, systemPrompt, selectedModel, false);
+    const hojeStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' });
+
+    const greeting = getDailyGreeting();
+    const body = `${greeting}
+Data: ${hojeStr} (Rio Branco)
+
+Resumo: ${resumo_jarvis}
+
+Financeiro:
+- Faturamento: R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Investido: R$ ${investimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+- Lucro Liquido: R$ ${lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ROAS: ${roas}x
+- Progresso Meta: ${percentual_meta}% atingida
+
+Metricas:
+- Vendas: ${vendas} (Ticket Medio: R$ ${ticket_medio.replace('.', ',')})
+- Leads Novos: ${leads} (Conversao: ${conversao}%)
+
+Campanhas:
+- Melhor: ${melhorCampanha} (ROAS: ${roasMelhor}x)
+- Pior: ${piorCampanha} (ROAS: ${roasPior}x)`;
+
+    const title = `Relatorio SupercellAI - Diario ${hojeStr}`;
+    const tags = '';
+
+    return await sendNftyNotification({ title, body, priority: 'default', tags });
+  } catch (err) {
+    console.error('[NFTY] Erro ao gerar relatorio diario de performance:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function runWeeklyNftyReport() {
+  console.log('[NFTY] Iniciando geracao do Relatorio Semanal de Performance...');
+  try {
+    const { metrics, pdv } = await fetchDashboardMetrics({ periodo: '7dias' });
+    const aiConfigRes = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
+    const systemPrompt = aiConfigRes.rows[0]?.systemPrompt;
+    const selectedModel = aiConfigRes.rows[0]?.model || "gpt-4o";
+
+    const faturamento = pdv.faturamento;
+    const investimento = metrics.totalSpent;
+    const lucro = pdv.lucro - investimento;
+    const roas = investimento > 0 ? (faturamento / investimento).toFixed(1) : '0.0';
+    const vendas = pdv.qtd;
+    const ticket_medio = vendas > 0 ? (faturamento / vendas).toFixed(2) : '0.00';
+
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - 7);
+    startOfWeek.setHours(0,0,0,0);
+    const leadsRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1', [startOfWeek]);
+    const leads = parseInt(leadsRes.rows[0].count) || 0;
+    const conversao = leads > 0 ? ((vendas / leads) * 100).toFixed(1) : '0.0';
+
+    let melhorCampanha = 'Nenhuma';
+    let percentualFaturamentoTrafego = '0';
+
+    const qAcc = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a.status = \'ACTIVE\' LIMIT 1');
+    if (qAcc.rows.length > 0) {
+      try {
+        const acc = qAcc.rows[0];
+        const decryptedToken = decrypt(acc.accessToken);
+        const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
+        const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,insights.date_preset(last_7d){spend,action_values}&access_token=${decryptedToken}`;
+        const campRes = await fetch(url).then(r => r.json());
+        
+        if (campRes.data) {
+          let camps = campRes.data.map(c => {
+            const ins = c.insights?.data?.[0] || {};
+            const spend = parseFloat(ins.spend || 0);
+            let purchaseValue = 0;
+            if (ins.action_values) {
+              const pv = ins.action_values.find(a => a.action_type === 'purchase');
+              if (pv) purchaseValue = parseFloat(pv.value || 0);
+            }
+            return { name: c.name, spend, purchaseValue };
+          }).filter(c => c.spend > 0);
+
+          if (camps.length > 0) {
+            camps.sort((a, b) => b.purchaseValue - a.purchaseValue);
+            melhorCampanha = camps[0].name;
+            const totalPurchaseValue = camps.reduce((sum, c) => sum + c.purchaseValue, 0);
+            percentualFaturamentoTrafego = totalPurchaseValue > 0 ? ((camps[0].purchaseValue / totalPurchaseValue) * 100).toFixed(0) : '0';
+          }
+        }
+      } catch (err) {
+        console.error('[NFTY] Erro ao buscar campanhas para o relatorio semanal:', err.message);
+      }
+    }
+
+    const metricsForSummary = {
+      faturamento: faturamento.toFixed(2),
+      investimento: investimento.toFixed(2),
+      lucro: lucro.toFixed(2),
+      roas,
+      vendas,
+      leads,
+      conversao
+    };
+
+    const resumo_jarvis_semanal = await generateNftyShortSummary(metricsForSummary, systemPrompt, selectedModel, true);
+
+    const hoje = new Date();
+    const dataFimStr = hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' });
+    const semanaPassada = new Date();
+    semanaPassada.setDate(semanaPassada.getDate() - 6);
+    const dataInicioStr = semanaPassada.toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' });
+
+    const greeting = getWeeklyGreeting();
+    const body = `${greeting}
+Periodo: ${dataInicioStr} a ${dataFimStr} (Rio Branco)
+
+Resumo: ${resumo_jarvis_semanal}
+
+Financeiro:
+- Faturamento: R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Investido: R$ ${investimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+- Lucro Liquido: R$ ${lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ROAS Medio: ${roas}x
+
+Metricas:
+- Vendas: ${vendas} | Ticket Medio: R$ ${ticket_medio.replace('.', ',')}
+- Leads Gerados: ${leads} | Conversao: ${conversao}%
+
+Anuncios:
+- Melhor Campanha: ${melhorCampanha} (${percentualFaturamentoTrafego}% do faturamento de trafego)`;
+
+    const title = `Relatorio SupercellAI - Semanal ${dataFimStr}`;
+    const tags = '';
+
+    return await sendNftyNotification({ title, body, priority: 'default', tags });
+  } catch (err) {
+    console.error('[NFTY] Erro ao gerar relatorio semanal de performance:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+app.get('/api/settings/nfty', async (req, res) => {
+  try {
+    const config = await pool.query('SELECT * FROM "NotificationConfig" WHERE id = $1', ['default']);
+    if (config.rows.length === 0) {
+      return res.status(404).json({ error: 'Configuracao nao encontrada' });
+    }
+    res.json(config.rows[0]);
+  } catch (err) {
+    console.error('Erro ao buscar configuracoes do nfty:', err);
+    res.status(500).json({ error: 'Erro ao buscar configuracoes do nfty' });
+  }
+});
+
+app.post('/api/settings/nfty', async (req, res) => {
+  const { topic, url, enabled, dailyReportTime } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE "NotificationConfig" SET 
+        topic = $1, 
+        url = $2, 
+        enabled = $3, 
+        "dailyReportTime" = $4,
+        "updatedAt" = NOW() 
+       WHERE id = $5 RETURNING *`,
+      [topic, url || 'https://ntfy.sh', enabled !== false, dailyReportTime || '19:00', 'default']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erro ao salvar configuracoes do nfty:', err);
+    res.status(500).json({ error: 'Erro ao salvar configuracoes do nfty' });
+  }
+});
+
+app.post('/api/settings/nfty/test-daily', async (req, res) => {
+  try {
+    const result = await runDailyNftyReport();
+    if (result.success) {
+      res.json({ success: true, message: 'Relatorio diario enviado com sucesso!' });
+    } else {
+      res.status(500).json({ error: result.error || 'Falha ao enviar relatorio diario.' });
+    }
+  } catch (err) {
+    console.error('Erro no envio de teste diario:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM "Notification" ORDER BY "createdAt" DESC LIMIT 50');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar notificacoes:', err);
+    res.status(500).json({ error: 'Erro ao buscar notificacoes' });
+  }
+});
+
+app.post('/api/notifications/read-all', async (req, res) => {
+  try {
+    await pool.query('UPDATE "Notification" SET "read" = true WHERE "read" = false');
+    res.json({ success: true, message: 'Todas as notificacoes foram marcadas como lidas.' });
+  } catch (err) {
+    console.error('Erro ao marcar todas as notificacoes como lidas:', err);
+    res.status(500).json({ error: 'Erro ao processar marcacao de notificacoes' });
+  }
+});
+
+app.put('/api/notifications/:id/read', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('UPDATE "Notification" SET "read" = true WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Notificacao marcada como lida.' });
+  } catch (err) {
+    console.error(`Erro ao marcar notificacao ${id} como lida:`, err);
+    res.status(500).json({ error: 'Erro ao processar marcacao de notificacao' });
+  }
+});
+
+app.post('/api/settings/nfty/test-weekly', async (req, res) => {
+  try {
+    const result = await runWeeklyNftyReport();
+    if (result.success) {
+      res.json({ success: true, message: 'Relatorio semanal enviado com sucesso!' });
+    } else {
+      res.status(500).json({ error: result.error || 'Falha ao enviar relatorio semanal.' });
+    }
+  } catch (err) {
+    console.error('Erro no envio de teste semanal:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export async function triggerRealTimeSaleNotification(vendedor, produto, valor, lucro) {
+  try {
+    const configRes = await pool.query('SELECT * FROM "NotificationConfig" WHERE id = $1', ['default']);
+    if (configRes.rows.length === 0 || !configRes.rows[0].enabled) return;
+    
+    const acreTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Rio_Branco' }));
+    const hour = acreTime.getHours();
+    const minute = acreTime.getMinutes();
+    const totalMinutes = hour * 60 + minute;
+
+    const startMinutes = 7 * 60; // 07:00
+    const endMinutes = 18 * 60 + 30; // 18:30
+
+    if (totalMinutes >= startMinutes && totalMinutes <= endMinutes) {
+      const faturamentoBRL = parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const lucroBRL = parseFloat(lucro).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      
+      const title = "Relatorio SupercellAI - Nova Venda";
+      const body = `Venda realizada por ${vendedor || 'Vendedor Indefinido'}:
+Produto: ${produto}
+Valor: R$ ${faturamentoBRL}
+Lucro Estimado: R$ ${lucroBRL}`;
+      
+      const tags = '';
+      await sendNftyNotification({ title, body, priority: 'default', tags });
+    } else {
+      console.log(`[NFTY] Notificacao de venda silenciada fora do horario comercial (${hour}:${minute} Rio Branco).`);
+    }
+  } catch (err) {
+    console.error('[NFTY] Erro ao disparar push de nova venda:', err);
+  }
+}
+
+export async function runLunchNftyReport() {
+  console.log('[NFTY] Gerando relatorio parcial do almoco...');
+  try {
+    const { metrics, pdv } = await fetchDashboardMetrics({ periodo: 'hoje' });
+    const faturamento = pdv.faturamento;
+    const vendas = pdv.qtd;
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0,0,0,0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23,59,59,999);
+    const leadsRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [startOfDay, endOfDay]);
+    const leads = parseInt(leadsRes.rows[0].count) || 0;
+
+    const title = "Relatorio SupercellAI - Parcial do Almoço";
+    const body = `Chefe, segue o balanço parcial de hoje até as 13:00:
+- Faturamento: R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+- Vendas Realizadas: ${vendas} aparelhos
+- Novos Leads Recebidos: ${leads} contatos`;
+
+    const tags = '';
+    return await sendNftyNotification({ title, body, priority: 'default', tags });
+  } catch (err) {
+    console.error('[NFTY] Erro no relatorio do almoco:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function runCpaNftyReport() {
+  console.log('[NFTY] Verificando limites de CPA...');
+  try {
+    const aiConfigRes = await pool.query('SELECT * FROM "AiConfig" WHERE id = $1', ['default']);
+    const cpaThreshold = aiConfigRes.rows[0]?.cpaThreshold || 0;
+    
+    if (cpaThreshold <= 0) return { success: false, error: 'CPA limite nao configurado' };
+
+    const qAcc = await pool.query('SELECT a."actId", b."accessToken" FROM "AdAccount" a JOIN "BusinessManager" b ON a."bmId" = b.id WHERE a.status = \'ACTIVE\' LIMIT 1');
+    if (qAcc.rows.length === 0) return { success: false, error: 'Conta de anúncios ativa nao encontrada' };
+
+    const acc = qAcc.rows[0];
+    const decryptedToken = decrypt(acc.accessToken);
+    const fetchId = acc.actId.startsWith('act_') ? acc.actId : `act_${acc.actId}`;
+    const url = `https://graph.facebook.com/v19.0/${fetchId}/campaigns?fields=name,status,insights.date_preset(today){spend,actions}&access_token=${decryptedToken}`;
+    const campRes = await fetch(url).then(r => r.json());
+
+    if (!campRes.data) return { success: false, error: 'Nenhuma campanha retornada da API Meta' };
+
+    let cpaAlerts = [];
+    campRes.data.forEach(c => {
+      if (c.status !== 'ACTIVE') return;
+      const ins = c.insights?.data?.[0] || {};
+      const spend = parseFloat(ins.spend || 0);
+      const leads = parseInt(ins.actions?.find(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d' || a.action_type === 'onsite_conversion.messaging_conversation_started')?.value || 0);
+      const cpa = leads > 0 ? spend / leads : 0;
+
+      if (cpa > cpaThreshold) {
+        cpaAlerts.push(`- Campanha: ${c.name} (CPA: R$ ${cpa.toFixed(2)} | Limite: R$ ${cpaThreshold.toFixed(2)})`);
+      }
+    });
+
+    if (cpaAlerts.length > 0) {
+      const title = "Relatorio SupercellAI - Alerta de CPA";
+      const body = `Chefe, detectei campanhas com CPA acima do limite configurado hoje:
+${cpaAlerts.join('\n')}`;
+      const tags = '';
+      return await sendNftyNotification({ title, body, priority: 'high', tags });
+    } else {
+      console.log('[NFTY] Nenhuma campanha ultrapassou o limite de CPA hoje.');
+      return { success: true, message: 'CPA dentro do limite configurado.' };
+    }
+  } catch (err) {
+    console.error('[NFTY] Erro ao checar alerta de CPA:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+app.post('/api/settings/nfty/test-lunch', async (req, res) => {
+  try {
+    const result = await runLunchNftyReport();
+    res.json({ success: true, message: 'Relatorio parcial de almoco disparado com sucesso!' });
+  } catch (err) {
+    console.error('Erro no envio de teste de almoco:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/settings/nfty/test-cpa', async (req, res) => {
+  try {
+    const result = await runCpaNftyReport();
+    res.json({ success: true, message: 'Alerta de CPA disparado com sucesso!' });
+  } catch (err) {
+    console.error('Erro no envio de teste de CPA:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2002,6 +2754,7 @@ app.post('/api/knowledge/upload', upload.single('file'), async (req, res) => {
     );
 
     console.log('🎯 [KNOWLEDGE] Arquivo memorizado com sucesso! ID:', id);
+    clearJarvisDiagnosticsCache();
     res.json(result.rows[0]);
   } catch (err) {
     console.error('❌ [KNOWLEDGE] Erro crítico no upload:', err);
@@ -2012,6 +2765,7 @@ app.post('/api/knowledge/upload', upload.single('file'), async (req, res) => {
 app.delete('/api/knowledge/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM "KnowledgeFile" WHERE id = $1', [req.params.id]);
+    clearJarvisDiagnosticsCache();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao deletar arquivo.' });
@@ -2173,15 +2927,15 @@ app.post('/api/bms', async (req, res) => {
         }
 
         for(const acc of uniqueAccounts) {
-            // Status 1 é o único que a Meta define como "ACTIVE" (rodando normalmente)
-            // Vou logar o status real para entendermos o que a Meta está enviando
+            // Status 1 = ACTIVE, Status 9 = IN_GRACE_PERIOD, Status 3 = UNSETTLED (campanhas operacionais)
             console.log(`[Meta Sync] Conta: ${acc.name} | Status API: ${acc.account_status}`);
             
-            const status = (acc.account_status === 1) ? 'ACTIVE' : 'DISABLED';
+            const status = (acc.account_status === 1 || acc.account_status === 9 || acc.account_status === 3) ? 'ACTIVE' : 'DISABLED';
             
             await pool.query('INSERT INTO "AdAccount" (id, name, "actId", status, "bmId", "updatedAt") VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW()) ON CONFLICT ("actId") DO UPDATE SET status = EXCLUDED.status, name = EXCLUDED.name', [acc.name || 'Conta sem nome', acc.account_id, status, bmRes.rows[0].id]);
         }
 
+        clearJarvisDiagnosticsCache();
         res.json({ message: 'Conectado!', found: uniqueAccounts.length });
     } catch(e) { 
         console.error('Erro ao conectar BM:', e);
@@ -2201,6 +2955,7 @@ app.delete('/api/bms/:id', async (req, res) => {
         // 3. Deletar a BM
         await pool.query('DELETE FROM "BusinessManager" WHERE id = $1', [id]);
         
+        clearJarvisDiagnosticsCache();
         res.json({ message: 'BM e AdAccounts removidas com sucesso! Os leads foram preservados.' });
     } catch (err) {
         console.error('Erro ao remover BM:', err);
@@ -2231,7 +2986,15 @@ app.get('/api/leads', async (req, res) => {
       if (diffHours > 48) currentTemp = 'Frio';
       else if (diffHours > 12) currentTemp = 'Morno';
       
-      return { ...lead, temperature: currentTemp };
+      // Lógica de Remarketing dinâmico: se o lead está Frio (>48h sem falar)
+      // e seu status atual no banco é ativo (Novo ou Em Atendimento),
+      // retornamos o status como 'Remarketing' para que apareça na respectiva coluna no Kanban.
+      let status = lead.status;
+      if (currentTemp === 'Frio' && (status === 'Novo' || status === 'Em Atendimento')) {
+        status = 'Remarketing';
+      }
+      
+      return { ...lead, status, temperature: currentTemp };
     });
 
     res.json(leadsComTemp);
@@ -2702,6 +3465,7 @@ app.post('/api/settings/goals', async (req, res) => {
       'UPDATE "SalesGoal" SET "dailySalesGoal" = $1, "dailyLeadsGoal" = $2, "updatedAt" = NOW() WHERE id = $3',
       [dailySalesGoal, dailyLeadsGoal, 'default']
     );
+    clearJarvisDiagnosticsCache();
     res.json({ message: 'Metas atualizadas com sucesso' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao salvar metas' });

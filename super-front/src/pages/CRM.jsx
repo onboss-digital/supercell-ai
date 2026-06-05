@@ -54,7 +54,7 @@ function CRM() {
 
 
 
-  const statuses = ['Novo', 'Em Atendimento', 'Qualificado', 'Venda Concluída', 'Perdido'];
+  const statuses = ['Novo', 'Em Atendimento', 'Remarketing', 'Qualificado', 'Venda Concluída', 'Perdido'];
 
   const standardTags = ['Tráfego Pago', 'Tráfego Orgânico'];
 
@@ -326,6 +326,8 @@ function CRM() {
       case 'Novo': return '#0049db';
 
       case 'Em Atendimento': return '#C5A059';
+
+      case 'Remarketing': return '#8B5CF6';
 
       case 'Qualificado': return '#10B981';
 
@@ -604,7 +606,11 @@ function CRM() {
 
                   <button 
 
-                    onClick={() => setTempFilter('Frio')}
+                    onClick={() => {
+                      setStatusFilter('Remarketing');
+                      setPlatformFilter('Todos');
+                      setTempFilter('Todos');
+                    }}
 
                     style={{ background: 'white', color: '#0f172a', border: 'none', padding: '0.5rem 1rem', borderRadius: '2rem', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer' }}
 
