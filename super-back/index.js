@@ -1186,20 +1186,29 @@ async function fetchDashboardMetrics({ actId, periodo, dateStart, dateEnd }) {
   let paramsPDV = [];
 
   const getLocalTodayRange = () => {
-    const start = new Date();
-    start.setHours(0,0,0,0);
-    const end = new Date();
-    end.setHours(23,59,59,999);
+    // Calcula o inicio e fim do dia no fuso horario de Rio Branco (UTC-5)
+    const TZ = 'America/Rio_Branco';
+    const now = new Date();
+    // Obtem a data local de Rio Branco
+    const dateStr = now.toLocaleDateString('en-CA', { timeZone: TZ }); // "YYYY-MM-DD"
+    // Constroi inicio e fim do dia em UTC equivalente ao dia de Rio Branco
+    const start = new Date(`${dateStr}T00:00:00-05:00`);
+    const end   = new Date(`${dateStr}T23:59:59.999-05:00`);
     return [start, end];
   };
 
   const getLocalYesterdayRange = () => {
-    const start = new Date();
-    start.setDate(start.getDate() - 1);
-    start.setHours(0,0,0,0);
-    const end = new Date();
-    end.setDate(end.getDate() - 1);
-    end.setHours(23,59,59,999);
+    const TZ = 'America/Rio_Branco';
+    const now = new Date();
+    // Obtém a data de ontem em Rio Branco
+    const acreNow = new Date(now.toLocaleString('en-US', { timeZone: TZ }));
+    acreNow.setDate(acreNow.getDate() - 1);
+    const year  = acreNow.getFullYear();
+    const month = String(acreNow.getMonth() + 1).padStart(2, '0');
+    const day   = String(acreNow.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const start = new Date(`${dateStr}T00:00:00-05:00`);
+    const end   = new Date(`${dateStr}T23:59:59.999-05:00`);
     return [start, end];
   };
 
@@ -2284,10 +2293,10 @@ export async function runDailyNftyReport() {
     const vendas = pdv.qtd;
     const ticket_medio = vendas > 0 ? (faturamento / vendas).toFixed(2) : '0.00';
     
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23,59,59,999);
+    // Calcula inicio e fim do dia no fuso de Rio Branco (UTC-5)
+    const _todayDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Rio_Branco' });
+    const startOfDay = new Date(`${_todayDateStr}T00:00:00-05:00`);
+    const endOfDay   = new Date(`${_todayDateStr}T23:59:59.999-05:00`);
     const leadsRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [startOfDay, endOfDay]);
     const leads = parseInt(leadsRes.rows[0].count) || 0;
     const conversao = leads > 0 ? ((vendas / leads) * 100).toFixed(1) : '0.0';
@@ -2613,10 +2622,10 @@ export async function runLunchNftyReport() {
     const faturamento = pdv.faturamento;
     const vendas = pdv.qtd;
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23,59,59,999);
+    // Calcula inicio e fim do dia no fuso de Rio Branco (UTC-5)
+    const _todayDateStrLunch = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Rio_Branco' });
+    const startOfDay = new Date(`${_todayDateStrLunch}T00:00:00-05:00`);
+    const endOfDay   = new Date(`${_todayDateStrLunch}T23:59:59.999-05:00`);
     const leadsRes = await pool.query('SELECT COUNT(*) FROM "Lead" WHERE "createdAt" >= $1 AND "createdAt" <= $2', [startOfDay, endOfDay]);
     const leads = parseInt(leadsRes.rows[0].count) || 0;
 
