@@ -1253,17 +1253,17 @@ function Reports() {
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Fale comigo, senhor..."
                   autoComplete="off"
+                  style={{ fontSize: '16px' }}
                 />
 
                 <button 
                   type="button"
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onMouseLeave={stopRecording}
-                  onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
-                  onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    toggleRecording();
+                  }}
                   className={`jarvis-mobile-btn jarvis-mobile-btn-mic ${isRecording ? 'recording' : ''}`}
-                  title="Comando de Voz (Segure para gravar)"
+                  title="Comando de Voz (Toque para gravar/parar)"
                 >
                   <span className="material-icons-outlined">
                     {isRecording ? 'mic_off' : 'mic'}
