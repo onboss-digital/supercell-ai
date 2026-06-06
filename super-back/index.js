@@ -882,19 +882,35 @@ app.post('/api/webhooks/zapi', async (req, res) => {
       const accountRes = await pool.query('SELECT id FROM "AdAccount" WHERE status = \'ACTIVE\' LIMIT 1');
       if (accountRes.rows.length > 0) targetAccountId = accountRes.rows[0].id;
 
+      let campaignName = 'Z-API';
+      let adName = 'Direto/Z-API';
+      let tags = ['Tráfego Orgânico'];
+      let finalMessageText = messageText;
+
+      // Extração de Rastreio (Meta Ads)
+      const refRegex = /\[Ref:\s*([^\/\]]+)\s*\/\s*([^\]]+)\]/i;
+      const refMatch = messageText.match(refRegex);
+
+      if (refMatch) {
+        campaignName = refMatch[1].trim();
+        adName = refMatch[2].trim();
+        tags = ['Tráfego Pago'];
+        finalMessageText = messageText.replace(refRegex, '').trim();
+      }
+
       const existingLeadCheck = await pool.query('SELECT id FROM "Lead" WHERE phone = $1', [phone]);
       const isNewLead = existingLeadCheck.rows.length === 0;
 
       const leadRes = await pool.query(
         `INSERT INTO "Lead" (id, name, phone, status, "adAccountId", "adName", "adsetName", "campaignName", "platform", tags, "createdAt", "updatedAt", "lastInteractionAt", "profilePic") 
-         VALUES (gen_random_uuid(), $1, $2, 'Novo', $3, 'Direto/Z-API', 'Inbound', 'Z-API', 'whatsapp', $4, NOW(), NOW(), NOW(), $5)
+         VALUES (gen_random_uuid(), $1, $2, 'Novo', $3, $4, 'Inbound', $5, 'whatsapp', $6, NOW(), NOW(), NOW(), $7)
          ON CONFLICT (phone) DO UPDATE SET 
            "lastInteractionAt" = NOW(), 
            "updatedAt" = NOW(),
            "profilePic" = COALESCE(EXCLUDED."profilePic", "Lead"."profilePic"),
            name = CASE WHEN "Lead".name = 'Cliente WhatsApp' THEN EXCLUDED.name ELSE "Lead".name END
          RETURNING id, status`,
-        [customerName, phone, targetAccountId, ['Tráfego Orgânico'], profilePic]
+        [customerName, phone, targetAccountId, adName, campaignName, tags, profilePic]
       );
       
       const leadId = leadRes.rows[0].id;
@@ -911,7 +927,7 @@ app.post('/api/webhooks/zapi', async (req, res) => {
 
       const resultWA = await pool.query(
         'INSERT INTO "Message" (id, content, sender, "leadId", "createdAt", mid) VALUES (gen_random_uuid(), $1, $2, $3, NOW(), $4) ON CONFLICT (mid) DO NOTHING RETURNING id',
-        [messageText, isFromMe ? 'agent' : 'lead', leadId, waMessageId]
+        [finalMessageText, isFromMe ? 'agent' : 'lead', leadId, waMessageId]
       );
 
       if (resultWA.rows.length > 0 && !isFromMe) {
