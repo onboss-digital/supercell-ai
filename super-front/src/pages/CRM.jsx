@@ -1087,27 +1087,51 @@ function CRM() {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
 
-                           <div style={{ display: 'flex', flexDirection: 'column' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-on-surface-variant)', overflow: 'hidden', flexShrink: 0 }}>
 
-                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: 'var(--color-on-surface)' }}>{lead.name}</span>
+                                {lead.profilePic ? (
 
-                                {lead.hasUnread && (
+                                  <img src={lead.profilePic} alt={lead.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-                                  <div className="pulse-ping" style={{ minWidth: '18px', height: '18px', padding: '0 5px', background: '#0ea5e9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.65rem', fontWeight: '900' }}>
+                                ) : (
 
-                                    {lead.unreadCount || 1}
-
-                                  </div>
+                                  <span style={{ fontWeight: '900', fontSize: '0.8rem' }}>{(lead.name || 'L').charAt(0).toUpperCase()}</span>
 
                                 )}
 
                               </div>
 
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+
+                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+
+                                   <span style={{ fontWeight: '800', fontSize: '0.85rem', color: 'var(--color-on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{lead.name}</span>
+
+                                   {lead.hasUnread && (
+
+                                     <div className="pulse-ping" style={{ minWidth: '18px', height: '18px', padding: '0 5px', background: '#0ea5e9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.65rem', fontWeight: '900' }}>
+
+                                       {lead.unreadCount || 1}
+
+                                     </div>
+
+                                   )}
+
+                                 </div>
+
+                                 <div style={{ fontSize: '0.65rem', color: 'var(--color-on-surface-variant)', fontWeight: '800' }}>
+
+                                    {lead.platform === 'instagram' ? `@${lead.instagramHandle || 'direct'}` : lead.phone}
+
+                                 </div>
+
+                              </div>
+
                            </div>
 
-                           <div style={{ color: lead.platform === 'instagram' ? '#dc2743' : '#25D366' }}>
+                           <div style={{ color: lead.platform === 'instagram' ? '#dc2743' : '#25D366', flexShrink: 0 }}>
 
                               {lead.platform === 'instagram' ? (
 
@@ -1120,12 +1144,6 @@ function CRM() {
                               )}
 
                            </div>
-
-                        </div>
-
-                        <div style={{ fontSize: '0.7rem', color: 'var(--color-on-surface-variant)', fontWeight: '800', marginBottom: '0.4rem' }}>
-
-                           {lead.platform === 'instagram' ? `@${lead.instagramHandle || 'direct'}` : lead.phone}
 
                         </div>
 
@@ -1147,11 +1165,29 @@ function CRM() {
 
                         <div style={{ borderTop: '1px solid var(--color-outline-variant)', paddingTop: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
-                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', maxWidth: '70%' }}>
 
-                              <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', fontWeight: '800' }}>{lead.campaignName || 'Direto'}</span>
+                              <span style={{ fontSize: '0.6rem', color: 'var(--color-on-surface-variant)', fontWeight: '800', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
 
-                              <span style={{ fontSize: '0.55rem', color: 'var(--color-on-surface-variant)', fontWeight: '700' }}>
+                                 <span className="material-icons-outlined" style={{ fontSize: '0.6rem', verticalAlign: 'middle', marginRight: '2px' }}>campaign</span>
+
+                                 {lead.campaignName || 'Direto'}
+
+                              </span>
+
+                              {lead.adName && lead.adName !== 'Direto/Z-API' && lead.adName !== 'Orgânico' && (
+
+                                <span style={{ fontSize: '0.55rem', color: 'var(--color-on-surface-variant)', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                                  <span className="material-icons-outlined" style={{ fontSize: '0.55rem', verticalAlign: 'middle', marginRight: '2px' }}>ads_click</span>
+
+                                  {lead.adName}
+
+                                </span>
+
+                              )}
+
+                              <span style={{ fontSize: '0.5rem', color: 'var(--color-on-surface-variant)', fontWeight: '600', marginTop: '0.2rem' }}>
 
                                  {new Date(lead.createdAt).toLocaleDateString('pt-BR')} {new Date(lead.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 
@@ -1748,9 +1784,9 @@ function CRM() {
 
                                    ) : (
 
-                                       (selectedLead?.platform?.toLowerCase().includes('whatsapp') ? companyProfile?.whatsapp?.logoUrl : companyProfile?.instagram?.logoUrl) ? (
+                                       companyProfile?.logoUrl ? (
 
-                                         <img src={selectedLead?.platform?.toLowerCase().includes('whatsapp') ? companyProfile?.whatsapp?.logoUrl : companyProfile?.instagram?.logoUrl} alt="Agent" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                         <img src={companyProfile.logoUrl} alt="Agent" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
                                       ) : (
 
