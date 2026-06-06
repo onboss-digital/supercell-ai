@@ -23,6 +23,7 @@ function Settings() {
     'jarvis': 'Jarvis',
     'equipe': 'Equipe',
     'faturamento': 'Faturamento',
+    'notificacoes': 'Notificações',
     'seguranca': 'Segurança'
   };
 
@@ -32,6 +33,7 @@ function Settings() {
     'Jarvis': 'jarvis',
     'Equipe': 'equipe',
     'Faturamento': 'faturamento',
+    'Notificações': 'notificacoes',
     'Segurança': 'seguranca'
   };
 
@@ -362,7 +364,7 @@ function Settings() {
     setConfirmModal({ show: true, title, message, onConfirm });
   };
 
-  const tabs = ['Geral', 'Integrações', 'Jarvis', 'Equipe', 'Faturamento', 'Segurança'];
+  const tabs = ['Geral', 'Integrações', 'Jarvis', 'Equipe', 'Faturamento', 'Notificações', 'Segurança'];
 
   // Controle de carregamento de dados por aba
   useEffect(() => {
@@ -378,6 +380,8 @@ function Settings() {
       fetchAiConfig();
     } else if (activeTab === 'Faturamento') {
       fetchBilling();
+    } else if (activeTab === 'Notificações') {
+      fetchNftyConfig();
     } else if (activeTab === 'Segurança') {
       fetchSecurity();
     }
