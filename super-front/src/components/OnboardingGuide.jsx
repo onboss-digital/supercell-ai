@@ -47,14 +47,7 @@ function OnboardingGuide() {
     }
   };
 
-  const [showWebhookModal, setShowWebhookModal] = useState(false);
-
   const handleStepClick = (step) => {
-    if (step.id === 'webhook') {
-      setShowWebhookModal(true);
-      return;
-    }
-
     const routes = {
       jarvis: '/settings/jarvis',
       company: '/settings/geral',
@@ -84,78 +77,6 @@ function OnboardingGuide() {
       alignItems: 'flex-end',
       fontFamily: 'var(--font-sans)'
     }}>
-      {/* Modal de Webhook */}
-      {showWebhookModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.85)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          padding: '2rem'
-        }}>
-          <div style={{
-            background: 'var(--color-surface-container-highest)',
-            width: '100%',
-            maxWidth: '500px',
-            borderRadius: '2rem',
-            padding: '2.5rem',
-            border: '1px solid rgba(255,255,255,0.1)',
-            position: 'relative',
-            animation: 'scaleUp 0.3s ease'
-          }}>
-            <button 
-              onClick={() => setShowWebhookModal(false)}
-              style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer' }}
-            >
-              <span className="material-icons-outlined">close</span>
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '1rem', background: 'var(--color-primary)', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-icons-outlined" style={{ fontSize: '2rem' }}>bolt</span>
-              </div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900' }}>Configurar Webhook</h2>
-            </div>
-
-            <p style={{ fontSize: '0.9rem', color: 'var(--color-on-surface-variant)', lineHeight: '1.6', marginBottom: '2rem' }}>
-              Para que o Jarvis receba os leads em tempo real, você deve configurar o Webhook na sua BM da Meta com os seguintes dados:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <label style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-primary)', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Callback URL</label>
-                <div style={{ background: 'black', padding: '1rem', borderRadius: '0.75rem', fontSize: '0.85rem', fontFamily: 'var(--font-mono)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <code style={{ color: '#10B981' }}>{API_URL}/api/webhooks/whatsapp</code>
-                  <button onClick={() => navigator.clipboard.writeText(`${API_URL}/api/webhooks/whatsapp`)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                    <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>content_copy</span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-primary)', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Verify Token</label>
-                <div style={{ background: 'black', padding: '1rem', borderRadius: '0.75rem', fontSize: '0.85rem', fontFamily: 'var(--font-mono)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <code style={{ color: '#10B981' }}>supercell_verify_token</code>
-                  <button onClick={() => navigator.clipboard.writeText('supercell_verify_token')} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                    <span className="material-icons-outlined" style={{ fontSize: '1.2rem' }}>content_copy</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => setShowWebhookModal(false)}
-              style={{ width: '100%', marginTop: '2.5rem', padding: '1rem', borderRadius: '1rem', background: 'var(--color-primary)', color: 'black', border: 'none', fontWeight: '900', cursor: 'pointer' }}
-            >
-              ENTENDI, VOU CONFIGURAR
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Botão de Toggle */}
       {!isOpen && (

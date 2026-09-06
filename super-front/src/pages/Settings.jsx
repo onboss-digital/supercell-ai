@@ -52,89 +52,11 @@ function Settings() {
 
   const [mercadoStatus, setMercadoStatus] = useState({ active: false, lastSync: null });
 
-  // WhatsApp Evolution API States
-  const [waStatus, setWaStatus] = useState('disconnected');
-  const [waQR, setWaQR] = useState('');
-  const [waLoading, setWaLoading] = useState(false);
-  const [waError, setWaError] = useState('');
-  const [showWAModal, setShowWAModal] = useState(false);
 
-  const checkWAStatus = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/whatsapp/status`);
-      const data = await res.json();
-      if (data.instance?.state === 'open') {
-        setWaStatus('connected');
-      } else {
-        setWaStatus('disconnected');
-      }
-    } catch (err) {
-      console.error('Erro ao checar status WA', err);
-    }
-  };
-
-  const getWAQRCode = async (retryCount = 0) => {
-    if (retryCount === 0) {
-      setWaLoading(true);
-      setWaQR('');
-      setWaError('');
-    }
-
-    try {
-      const res = await fetch(`${API_URL}/api/whatsapp/qrcode`);
-      const data = await res.json();
-      
-      if (data.qrcode) {
-        setWaQR(data.qrcode);
-        setWaStatus('scanning');
-        setWaLoading(false);
-      } else if (data.status === 'connected') {
-        setWaStatus('connected');
-        setWaLoading(false);
-        showNotification('success', 'WhatsApp Conectado', 'Sua instância já está ativa e operacional via Z-API.');
-      } else if (data.status === 'pending') {
-        // Polling automático
-        if (retryCount < 10) {
-          setTimeout(() => getWAQRCode(retryCount + 1), 5000);
-        } else {
-          setWaLoading(false);
-          showNotification('info', 'Aguardando Z-API', 'O servidor da Z-API está demorando para responder. Tente novamente em alguns instantes.');
-        }
-      } else if (data.status === 'error' || data.error) {
-        setWaLoading(false);
-        setWaStatus('disconnected');
-        setWaError(data.error || 'Não foi possível gerar o QR Code.');
-        showNotification('error', 'Erro na Z-API', data.error || 'Não foi possível gerar o QR Code.');
-      } else {
-        setWaLoading(false);
-        setWaStatus('disconnected');
-      }
-    } catch (err) {
-      console.error('Erro ao gerar QR Code', err);
-      setWaLoading(false);
-      setWaStatus('disconnected');
-      setWaError('Não foi possível contatar o servidor da Z-API.');
-      showNotification('error', 'Erro de Conexão', 'Não foi possível contatar o servidor da Z-API.');
-    }
-  };
-
-  const logoutWA = async () => {
-    if (!window.confirm('Deseja realmente desconectar o WhatsApp?')) return;
-    try {
-      await fetch(`${API_URL}/api/whatsapp/logout`, { method: 'POST' });
-      setWaStatus('disconnected');
-      setWaQR('');
-    } catch (err) {
-      console.error('Erro ao desconectar WA', err);
-    }
-  };
-
-  // Busca dados do banco de dados quando entra na aba Integrações
   useEffect(() => {
     if (activeTab === 'Integrações') {
       fetchBMs();
       fetchMercadoStatus();
-      checkWAStatus();
       fetchNftyConfig();
     }
   }, [activeTab]);
@@ -976,65 +898,6 @@ function Settings() {
               Outros Conectores de API
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* WhatsApp Evolution Card */}
-              <div className="settings-card-flex" style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                padding: '1.5rem', 
-                background: 'var(--color-surface-container-lowest)', 
-                borderRadius: '1rem',
-                border: '1px solid var(--color-surface-container-low)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e' }}>
-                    <span className="material-icons-outlined">chat</span>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: '800', color: 'var(--color-on-surface)' }}>WhatsApp (Z-API)</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-on-surface-variant)', marginTop: '0.2rem' }}>
-                      {waStatus === 'connected' ? 'Conectado e operacional' : 'Integração de Mensagens Inbound & Outbound'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ 
-                    fontSize: '0.7rem', 
-                    fontWeight: '900', 
-                    padding: '0.4rem 0.8rem', 
-                    borderRadius: '2rem',
-                    background: waStatus === 'connected' ? '#10B98115' : '#f59e0b15',
-                    color: waStatus === 'connected' ? '#10B981' : '#f59e0b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem'
-                  }}>
-                    {waStatus === 'connected' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B981' }}></span>}
-                    {waStatus === 'connected' ? 'ONLINE' : 'DESCONECTADO'}
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setShowWAModal(true);
-                      if (waStatus !== 'connected') getWAQRCode();
-                    }}
-                    style={{
-                      background: '#25D366',
-                      color: 'white',
-                      border: 'none',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      padding: '0.6rem 1rem',
-                      borderRadius: '0.5rem',
-                      transition: 'opacity 0.2s',
-                    }}
-                    onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
-                    onMouseOut={e => e.currentTarget.style.opacity = '1'}
-                  >
-                    {waStatus === 'connected' ? 'Gerenciar' : 'Conectar'}
-                  </button>
-                </div>
-              </div>
-
               {[
                 { label: "Google Ads API", status: "Desconectado", icon: "ads_click" }
               ].map((item, i) => (
@@ -1911,88 +1774,6 @@ Aqui você tem liberdade total para tabelas e Markdown, mas É PROIBIDO O USO DE
         </div>
       )}
       
-      {/* Modal WhatsApp */}
-      {showWAModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-          <div style={{ background: 'white', width: '100%', maxWidth: '450px', borderRadius: '2rem', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
-            <div style={{ padding: '2rem', background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span className="material-icons-outlined" style={{ fontSize: '2rem' }}>whatsapp</span>
-                <div>
-                  <h3 style={{ fontWeight: '900', fontSize: '1.2rem' }}>WHATSAPP CRM</h3>
-                  <p style={{ fontSize: '0.7rem', fontWeight: '700', opacity: 0.8, textTransform: 'uppercase' }}>Z-API Cloud v3.0</p>
-                </div>
-              </div>
-              <button onClick={() => setShowWAModal(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-icons-outlined">close</span>
-              </button>
-            </div>
-
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-              {waStatus === 'connected' ? (
-                <div>
-                  <div style={{ width: '80px', height: '80px', background: '#dcfce7', color: '#16a34a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                    <span className="material-icons-outlined" style={{ fontSize: '3rem' }}>check_circle</span>
-                  </div>
-                  <h4 style={{ color: '#1e293b', fontSize: '1.2rem', fontWeight: '900' }}>Conectado com Sucesso!</h4>
-                  <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>O Supercell AI agora está recebendo e enviando mensagens deste número em tempo real.</p>
-                  
-                  <button onClick={logoutWA} style={{ marginTop: '2rem', width: '100%', padding: '1rem', borderRadius: '1rem', border: '1px solid #fee2e2', background: '#fef2f2', color: '#ef4444', fontWeight: '800', cursor: 'pointer' }}>
-                    DESCONECTAR NÚMERO
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <p style={{ color: '#1e293b', fontSize: '0.9rem', fontWeight: '700', marginBottom: '1.5rem' }}>
-                    Escaneie o QR Code abaixo para conectar o WhatsApp da empresa ao CRM.
-                  </p>
-
-                  <div style={{ width: '250px', height: '250px', background: '#f8fafc', borderRadius: '1.5rem', margin: '0 auto', border: '2px dashed #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-                    {waQR ? (
-                      <img src={waQR} alt="WhatsApp QR Code" style={{ width: '100%', height: '100%', padding: '1rem' }} />
-                    ) : waLoading ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #25D366', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>
-                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800' }}>SINCRONIZANDO...</span>
-                      </div>
-                    ) : waError ? (
-                      <div style={{ textAlign: 'center', padding: '1rem' }}>
-                        <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#ef4444', marginBottom: '0.5rem' }}>error_outline</span>
-                        <p style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: '800', margin: 0 }}>FALHA NA CONEXÃO</p>
-                        <p style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '0.25rem', lineHeight: '1.2' }}>{waError}</p>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '1rem' }}>
-                        <span className="material-icons-outlined" style={{ fontSize: '2.5rem', color: '#64748b', marginBottom: '0.5rem' }}>qr_code_2</span>
-                        <p style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800', margin: 0 }}>QR CODE NÃO GERADO</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {!waQR && !waLoading && (
-                    <button onClick={getWAQRCode} style={{ marginTop: '1.5rem', width: '100%', padding: '1rem', borderRadius: '1rem', border: 'none', background: '#0ea5e9', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(14, 165, 233, 0.3)' }}>
-                      GERAR NOVO QR CODE
-                    </button>
-                  )}
-
-                  {waQR && (
-                    <p style={{ marginTop: '1rem', fontSize: '0.7rem', color: '#64748b', fontWeight: '600' }}>
-                      Aguardando leitura do QR Code...
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div style={{ padding: '1.5rem', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: waStatus === 'connected' ? '#22c55e' : '#f59e0b' }}></div>
-              <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
-                STATUS: {waStatus === 'connected' ? 'ONLINE' : 'AGUARDANDO CONEXÃO'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* MODAL DE STATUS INTELIGENTE (PREMIUM) */}
       {notification.show && (

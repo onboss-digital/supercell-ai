@@ -145,6 +145,16 @@ function PDV() {
     (sale.id.toString()).includes(searchTerm)
   );
 
+  if (!data || !data.metrics) {
+    return (
+      <main className="main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <p style={{ color: '#94a3b8', fontSize: '1.2rem', fontWeight: 'bold' }}>
+          {loading ? 'Carregando Dados Otimizados...' : 'Erro ao carregar dados do PDV (Verifique o servidor).'}
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="main-content">
       <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
@@ -214,10 +224,10 @@ function PDV() {
       {/* Cards de Métricas Principais */}
       <div style={{ display: 'grid', gridTemplateColumns: 'var(--metrics-grid, repeat(4, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
-          { label: 'Faturamento', value: formatCurrency(data.metrics.faturamento), color: '#10b981', icon: 'payments' },
-          { label: 'Lucro Total', value: formatCurrency(data.metrics.lucro_total), color: '#38bdf8', icon: 'trending_up' },
-          { label: 'Qtd. Vendas', value: data.metrics.qtd_vendas, color: '#f59e0b', icon: 'shopping_basket' },
-          { label: 'Ticket Médio', value: formatCurrency(data.metrics.ticket_medio), color: '#8b5cf6', icon: 'attach_money' }
+          { label: 'Faturamento', value: formatCurrency(data?.metrics?.faturamento), color: '#10b981', icon: 'payments' },
+          { label: 'Lucro Total', value: formatCurrency(data?.metrics?.lucro_total), color: '#38bdf8', icon: 'trending_up' },
+          { label: 'Qtd. Vendas', value: data?.metrics?.qtd_vendas || 0, color: '#f59e0b', icon: 'shopping_basket' },
+          { label: 'Ticket Médio', value: formatCurrency(data?.metrics?.ticket_medio), color: '#8b5cf6', icon: 'attach_money' }
         ].map((m, i) => (
           <div key={i} style={{ background: '#1e293b', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #334155', position: 'relative', overflow: 'hidden' }}>
             <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{m.label}</p>

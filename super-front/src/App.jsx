@@ -5,7 +5,6 @@ import GlobalHeader from './components/GlobalHeader';
 import Dashboard from './pages/Dashboard';
 import AdsAnalysis from './pages/AdsAnalysis';
 import Funnel from './pages/Funnel';
-import CRM from './pages/CRM';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -62,7 +61,6 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/ads" element={<AdsAnalysis />} />
           <Route path="/funnel" element={<Funnel />} />
-          <Route path="/crm" element={<CRM />} />
           <Route path="/pdv" element={<PDV />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
