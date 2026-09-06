@@ -111,18 +111,8 @@ export const menuItems = [
   { id: 'dashboard', label: 'Dashboard Geral', icon: 'dashboard', path: '/dashboard' },
   { id: 'ads', label: 'Campanhas', icon: 'ads_click', path: '/ads' },
   { id: 'funnel', label: 'Funil de Vendas', icon: 'filter_alt', path: '/funnel' },
-  { id: 'crm', label: 'CRM de Leads', icon: 'group', path: '/crm' },
   { id: 'pdv', label: 'PDV (Vendas)', icon: 'point_of_sale', path: '/pdv' },
   { id: 'reports', label: 'Relatórios da IA', icon: 'psychology', path: '/reports' },
   { id: 'settings', label: 'Configurações', icon: 'settings', path: '/settings' }
-];
-
-export const leadsData = [
-  { id: 'l1', name: 'João Silva', source: 'WhatsApp', status: 'Novo', date: '08/04/2026', value: 1200, phone: '(11) 98888-7777', email: 'joao@email.com', product: 'iPhone 13 128GB', temperature: 'Quente' },
-  { id: 'l2', name: 'Maria Souza', source: 'Instagram', status: 'Em Atendimento', date: '07/04/2026', value: 2500, phone: '(21) 97777-6666', email: 'maria@email.com', product: 'iPhone 15 Pro', temperature: 'Morno' },
-  { id: 'l3', name: 'Pedro Santos', source: 'Facebook', status: 'Novo', date: '08/04/2026', value: 800, phone: '(31) 96666-5555', email: 'pedro@email.com', product: 'Seminovos', temperature: 'Frio' },
-  { id: 'l4', name: 'Ana Oliveira', source: 'WhatsApp', status: 'Qualificado', date: '06/04/2026', value: 5000, phone: '(41) 95555-4444', email: 'ana@email.com', product: 'MacBook Air M2', temperature: 'Quente' },
-  { id: 'l5', name: 'Lucas Lima', source: 'Instagram', status: 'Perdido', date: '05/04/2026', value: 0, phone: '(51) 94444-3333', email: 'lucas@email.com', product: 'iPhone 14', temperature: 'Frio' },
-  { id: 'l6', name: 'Carla Dias', source: 'WhatsApp', status: 'Venda Concluída', date: '04/04/2026', value: 3500, phone: '(61) 93333-2222', email: 'carla@email.com', product: 'iPhone 15 Pro Max', temperature: 'Quente' },
 ];
 

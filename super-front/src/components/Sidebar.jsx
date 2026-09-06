@@ -69,7 +69,6 @@ const Sidebar = () => {
   const getIcon = (type) => {
     switch (type) {
       case 'venda': return 'monetization_on';
-      case 'lead': return 'person_add';
       case 'sistema': return 'warning';
       case 'meta': return 'emoji_events';
       default: return 'notifications';

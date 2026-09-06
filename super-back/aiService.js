@@ -242,10 +242,6 @@ export const generateJarvisChatResponse = async (chatHistory, metricsData, confi
     timeout: 30000,
   });
 
-  const leadsString = metricsData?.recentLeads?.length > 0 
-    ? metricsData.recentLeads.map(l => `- Nome: ${l.name} | Status: ${l.status} | Plataforma: ${l.platform} | Histórico da Conversa: [${l.chatHistory || 'Nenhuma mensagem'}]`).join('\n') 
-    : "Nenhum lead capturado recentemente.";
-    
   const salesString = metricsData?.recentSales?.length > 0 
     ? metricsData.recentSales.map(s => {
         const saleDate = s.createdAt ? new Date(s.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' }) : 'N/A';
@@ -265,10 +261,6 @@ Você possui acesso a ferramentas de banco de dados para consultar informações
 - Se ele quiser saber sobre performance de vendedores (ex: "quem vendeu mais este mês?"), chame a ferramenta obter_ranking_vendedores_periodo.
 - Se ele quiser saber quais aparelhos saíram ou quantidade de um modelo (ex: "qual celular saiu mais na semana?"), chame a ferramenta obter_ranking_produtos_periodo.
 Ao receber a resposta da ferramenta, elabore sua resposta baseando-se estritamente naqueles dados brutos retornados pelo banco.
-
-[HISTÓRICO RECENTE (ÚLTIMOS 5 CONTATOS NO CRM)]
-Se o usuário pedir para avaliar o engajamento, intenção de compra ou analisar as conversas, use os dados abaixo:
-${leadsString}
 
 [VENDAS RECENTES NO PDV]
 ${salesString}
@@ -346,7 +338,6 @@ Se o usuário perguntar o que cada tela ou funcionalidade faz, use este guia:
 - **Dashboard Geral**: Visão panorâmica de resultados financeiros. Gasto total em anúncios, Vendas fechadas (PDV), ROAS real e CPA. Mostra o "pulso" do negócio.
 - **Campanhas**: Controle remoto dos anúncios da Meta. Lista as campanhas ativas e permite pausá-las ou ativá-las diretamente por aqui, sem precisar abrir o Facebook.
 - **Funil de Vendas**: Visão Kanban das etapas de venda. Ajuda a visualizar as taxas de conversão entre as fases e encontrar gargalos onde os clientes estão travando.
-- **CRM de Leads**: Gestão central de contatos. Os leads caem aqui em tempo real via WhatsApp e Instagram. Permite ver o status de cada um e responder conversas diretamente pela plataforma.
 - **Relatórios da IA**: É a minha casa, senhor. Sua central de comando por voz e texto, onde estou disponível para cruzar dados operacionais e gerar inteligência estratégica para suas decisões.
 - **Configurações**: Onde fica o cérebro operacional. Permite conectar a Meta (Facebook), configurar chaves da OpenAI, ajustar metas de lucro e treinar a minha base de conhecimento.
 

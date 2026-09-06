@@ -27,44 +27,16 @@ model AdAccount {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   bm        BusinessManager @relation(fields: [bmId], references: [id])
-  leads     Lead[]
-}
-
-model Lead {
-  id                String    @id @default(uuid())
-  name              String
-  phone             String    @unique
-  instagramHandle   String?   
-  status            String    @default("NEW")
-  temperature       String    @default("Quente") // Quente, Morno, Frio
-  lastInteractionAt DateTime  @default(now())
-  productName       String?
-  profilePic        String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  adAccountId       String?
-  adName            String?
-  campaignName      String?
-  adsetName         String?
-  platform          String    @default("whatsapp")
-  tags              String[]  @default([])
-  adAccount         AdAccount? @relation(fields: [adAccountId], references: [id])
-  messages          Message[]
-}
-
-model Message {
-  id        String   @id @default(uuid())
-  mid       String?  @unique
-  content   String   @db.Text
-  sender    String   // "lead" ou "system" ou "agent"
-  createdAt DateTime @default(now())
-  leadId    String
-  lead      Lead     @relation(fields: [leadId], references: [id])
 }
 
 model Sale {
   id              Int       @id @default(autoincrement())
   telefoneCliente String?
+  nomeCliente     String?
+  vendedor        String?
+  produto         String?
+  statusVenda     String?
+  lucro           Decimal?  @db.Decimal(10, 2)
   valorTotal      Decimal?  @db.Decimal(10, 2)
   createdAt       DateTime? @default(now())
   canalVenda      String?
@@ -102,7 +74,6 @@ model CustomTemplate {
   updatedAt DateTime @updatedAt
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model CompanyProfile {
   id        String    @id
   name      String?   @default("Supercell AI Store")
@@ -112,7 +83,6 @@ model CompanyProfile {
   logoUrl   String?
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Invoice {
   id        Int       @id @default(autoincrement())
   date      String
@@ -121,7 +91,6 @@ model Invoice {
   createdAt DateTime? @default(now()) @db.Timestamp(6)
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model OnboardingState {
   id           String    @id
   is_dismissed Boolean?  @default(false)
@@ -129,7 +98,6 @@ model OnboardingState {
   updatedAt    DateTime? @default(now()) @db.Timestamp(6)
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model SalesGoal {
   id             String    @id
   dailySalesGoal Int?      @default(0)
@@ -137,14 +105,12 @@ model SalesGoal {
   updatedAt      DateTime? @default(now()) @db.Timestamp(6)
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model SecuritySettings {
   id                 String    @id
   twoFactorEnabled   Boolean?  @default(false)
   lastPasswordChange DateTime? @default(now()) @db.Timestamp(6)
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model TeamMember {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
@@ -155,10 +121,10 @@ model TeamMember {
 
 model CustomGoal {
   id        String   @id @default(uuid())
-  name      String   // Ex: "Lucro em 7 dias"
-  value     String   // Ex: "5000" ou "100"
-  unit      String?  // Ex: "R$", "%", "mensagens"
-  period    String?  // Ex: "7 dias", "diário"
+  name      String
+  value     String
+  unit      String?
+  period    String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,9 +133,34 @@ model CustomGoal {
 model KnowledgeFile {
   id        String   @id @default(uuid())
   fileName  String
-  content   String   // Conteúdo extraído do arquivo
-  fileType  String   // pdf, txt, docx, etc.
+  content   String
+  fileType  String
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  type      String
+  title     String
+  message   String
+  read      Boolean?  @default(false)
+  createdAt DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model NotificationConfig {
+  id              String    @id
+  topic           String
+  url             String?   @default("https://ntfy.sh")
+  enabled         Boolean?  @default(true)
+  dailyReportTime String?   @default("19:00")
+  updatedAt       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model JarvisMessage {
+  id        String   @id @default(uuid())
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
 }
