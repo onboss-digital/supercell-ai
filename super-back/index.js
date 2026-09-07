@@ -1721,27 +1721,10 @@ app.post('/api/jarvis/chat', async (req, res) => {
         Promise.resolve({ rows: [{ count: "0" }] }).then(r => parseInt(r.rows[0].count)),
         Promise.resolve({ rows: [{ count: "0" }] }).then(r => parseInt(r.rows[0].count)),
         Promise.resolve({ rows: [{ count: "0" }] }).then(r => parseInt(r.rows[0].count)),
+        Promise.resolve({ rows: [] }), // recentLeadsRes não existe mais
         pool.query(`
-          SELECT l.name, l.status, l.platform,
-            (
-              SELECT string_agg(UPPER(m.sender) || ': ' || m.content, ' | ' ORDER BY m.idx ASC)
-              FROM (
-                SELECT sender, content, "createdAt" as idx 
-                FROM "Message" 
-                WHERE "leadId" = l.id 
-                ORDER BY "createdAt" DESC 
-                LIMIT 10
-              ) m
-            ) as "chatHistory"
-          FROM (SELECT 1 as dummy) l 
-          ORDER BY l."lastInteractionAt" DESC LIMIT 5
-        `),
-        pool.query(`
-          SELECT s.*, 
-                 l.platform as lead_platform, 
-                 l."campaignName" as lead_campaign
+          SELECT s.*
           FROM "Sale" s
-          LEFT JOIN "Lead" l ON s."telefoneCliente" = l.phone
           ORDER BY s."createdAt" DESC LIMIT 10
         `),
         prisma.customGoal.findMany({ where: { active: true } }),
