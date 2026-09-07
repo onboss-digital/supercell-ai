@@ -1807,7 +1807,7 @@ app.post('/api/jarvis/chat', async (req, res) => {
     res.status(500).json({ 
       error: errorMessage,
       details: err.message,
-      suggestion: "Verifique suas chaves de API no arquivo .env ou tente reconectar a integração na aba de configurações."
+      suggestion: "DETALHE TÉCNICO PARA O DEV: " + err.message + " | " + err.stack
     });
   }
 });
