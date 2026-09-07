@@ -1597,7 +1597,7 @@ app.post('/api/jarvis/chat', async (req, res) => {
     const isSystemCommand = lastUserMessage && (lastUserMessage.includes('Aja como se o sistema tivesse acabado de ser ativado') || lastUserMessage.includes('[FALA]'));
     
     if (lastUserMessage && !isSystemCommand) {
-      await pool.query('INSERT INTO "JarvisMessage" (role, content) VALUES ($1, $2)', ['user', lastUserMessage]);
+      await pool.query('INSERT INTO "JarvisMessage" (id, role, content) VALUES (gen_random_uuid(), $1, $2)', ['user', lastUserMessage]);
     }
 
     // 2. Carrega histórico, configurações e contas ativas em paralelo (Melhoria de Performance)
@@ -1791,7 +1791,7 @@ app.post('/api/jarvis/chat', async (req, res) => {
     
     // 3. Salva a resposta do Jarvis no banco (Memória Eterna) - Apenas se não for saudação automática
     if (!isSystemCommand) {
-      await pool.query('INSERT INTO "JarvisMessage" (role, content) VALUES ($1, $2)', ['assistant', jarvisTextReply]);
+      await pool.query('INSERT INTO "JarvisMessage" (id, role, content) VALUES (gen_random_uuid(), $1, $2)', ['assistant', jarvisTextReply]);
     }
 
     res.json({ reply: jarvisTextReply });
